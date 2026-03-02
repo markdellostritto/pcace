@@ -1,0 +1,18 @@
+# constants
+p=1
+t=3
+# plot settings
+set xtics font ',12'
+set ytics font ',12'
+set xlabel "abscissa" font ',14'
+set ylabel "ordinate" font ',14'
+set grid xtics ytics lw 1.5
+set xzeroaxis lw 2
+set yzeroaxis lw 2
+set key font ',14'
+# plot
+plot\
+	'predict_train.dat' using 1:2 with points ps p pt t lc 'black' title 'target - train',\
+	'predict_train.dat' using 1:3 with points ps p pt t lc 'red' title 'predict - train',\
+	'predict_test.dat' using 1:3 with points ps p pt t lc 'blue' title 'predict - test'
+pause -1 'continue'
