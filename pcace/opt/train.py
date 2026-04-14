@@ -178,17 +178,6 @@ class TrainingTask(nn.Module):
     ):
         best_val_loss = float('inf')
         for epoch in range(1, epochs + 1):
-            # start SWA if needed
-            #if self.swa and self.global_step >= self.swa_start:
-            #    if self.swa_model is None:
-            #        logging.info('SWA started:')
-            #        if self.ema_model is not None:
-            #            self.swa_model = torch.optim.swa_utils.AveragedModel(self.ema_model.module)
-            #        else:
-            #            self.swa_model = torch.optim.swa_utils.AveragedModel(self.model)
-            #        self.swa_scheduler = torch.optim.swa_utils.SWALR(self.optimizer, swa_lr=self.swa_lr)
-            #        if len(self.swa_losses_list) > 0:
-            #            self.update_loss(self.swa_losses_list)
             # train
             total_loss = 0
             if subset_ratio < 1.0:
@@ -200,9 +189,11 @@ class TrainingTask(nn.Module):
                 else:
                     loss = self.train_step(batch, screen_nan=screen_nan, loss_index=None)
                 total_loss += loss
+                # step (sometimes)
+                if self.scheduler:
+                    if self.scheduler.__class__.__name__ == "OneCycleLR":
+                        self.scheduler.step()
             avg_loss = total_loss / len(train_loader)
-            #if self.swa and self.global_step >= self.swa_start:
-            #   self.swa_model.update_parameters(self.model)
             # validate
             if print_stride > 0 and self.global_step % print_stride == 0:
                 screen_output = True
@@ -220,13 +211,13 @@ class TrainingTask(nn.Module):
                 logging.info(f'Epoch {epoch}, Train Loss: {avg_loss:.4f}, Val Loss: {val_loss:.4f}')
                 self.retrieve_metrics('train', print_log=screen_output)
                 self.retrieve_metrics('val', print_log=screen_output)
-            #if self.swa and self.global_step >= self.swa_start:
-            #   self.swa_scheduler.step()
+            # set learning rate
             if self.scheduler:
                 if self.scheduler.__class__.__name__ == 'ReduceLROnPlateau':
                     self.scheduler.step(val_loss)
-                else:
+                elif self.scheduler.__class__.__name__ != "OneCycleLR":
                     self.scheduler.step()
+            # set checkpoints
             if epoch > val_stride and val_loss < best_val_loss:
                 best_val_loss = val_loss
                 self.save_model(bestmodel_path, device=self.device)
