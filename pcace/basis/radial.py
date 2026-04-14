@@ -2,11 +2,11 @@
 # Import Statements
 #****************************************************
 
-import numpy as np
 import torch
 
 __all__ = [
-    "RadialBessel", 
+    "RadialBesselJ",
+    "RadialBesselY",
     "RadialGaussian",
     "RadialLogistic",
     "RadialLogCosh",
@@ -20,13 +20,13 @@ __all__ = [
 #****************************************************
 
 """
-    Bessel radial functions
+    BesselJ radial functions
     @member rc - cutoff distance
     @member nr - number of radial functions
-    @member pf - Bessel prefactor 
-    @member weights - weights associated with each Bessel function (zero crossings)
+    @member pf - BesselJ prefactor 
+    @member weights - weights associated with each BesselJ function (zero crossings)
     @member train - whether to train the parameters
-    A series of Bessel functions with their origin at 0 (sinc functions)
+    A series of BesselJ functions with their origin at 0 (sinc functions)
     The weights determine the number of zero-crossings between 0 and rc.
     Note that rc is required in the definition of the function in order
         to scale the weights so that integer weights yield integer crossings
@@ -36,7 +36,7 @@ __all__ = [
         radial basis, allowing for discrimination of important signals at all
         distances between 0 and rc.
 """
-class RadialBessel(torch.nn.Module):
+class RadialBesselJ(torch.nn.Module):
     # ==== initialization ====
     def __init__(self, rc: float, nr: int, train=False):
         super().__init__()
@@ -65,7 +65,54 @@ class RadialBessel(torch.nn.Module):
             f"{self.__class__.__name__}(rc={self.rc}, nr={len(self.weights)}, "
             f"train={self.weights.requires_grad})"
         )
+
+"""
+    BesselY radial functions
+    @member rc - cutoff distance
+    @member nr - number of radial functions
+    @member pf - BesselY prefactor 
+    @member weights - weights associated with each BesselY function (zero crossings)
+    @member train - whether to train the parameters
+    A series of BesselY functions with their origin at 0 (cosc functions)
+    The weights determine the number of zero-crossings between 0 and rc.
+    Note that rc is required in the definition of the function in order
+        to scale the weights so that integer weights yield integer crossings
+        before rc, the function itself does not go to zero at rc.
+    The fluctuation of the cosc functino between 0 and rc gives multiple maxima
+        and minima.  Several of these functions together thus yield an effective
+        radial basis, allowing for discrimination of important signals at all
+        distances between 0 and rc.
+"""
+class RadialBesselY(torch.nn.Module):
+    # ==== initialization ====
+    def __init__(self, rc: float, nr: int, train=False):
+        super().__init__()
+        # set the number of functions
+        self.nr=nr
+        # set the weights
+        weights = torch.pi/rc * torch.linspace(
+            start=1.0,end=nr,steps=nr
+        )
+        if train: 
+            self.weights=torch.nn.Parameter(weights,requires_grad=True)
+        else: 
+            self.register_buffer("weights", weights)
+        # set constants
+        self.register_buffer(
+            "rc", torch.tensor(rc, dtype=torch.get_default_dtype())
+        )
         
+    # ==== calculation ====
+    def forward(self, dr: torch.Tensor) -> torch.Tensor:  # [..., 1]
+        return torch.cos(self.weights*dr)/dr
+        
+    # ==== output ====
+    def __repr__(self):
+        return (
+            f"{self.__class__.__name__}(rc={self.rc}, nr={len(self.weights)}, "
+            f"train={self.weights.requires_grad})"
+        )
+
 """
     Gaussian radial functions
     @member rc - cutoff distance
