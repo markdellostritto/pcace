@@ -73,7 +73,12 @@ class LossMap(torch.nn.Module):
                 case _: raise ValueError('Invalid normalization method.')
         else: 
             # loss - force
-            loss = loss_weight * self.loss_fn(pred_tensor, target_tensor)
+            nAtomsV=nAtoms[target['batch']].unsqueeze(-1).expand(-1,3).clone()
+            match self.normT:
+                case NormT.NONE: loss = loss_weight * self.loss_fn(pred_tensor, target_tensor)
+                case NormT.LINEAR: loss = loss_weight * self.loss_fn(pred_tensor/nAtomsV, target_tensor/nAtomsV)
+                case NormT.SQRT: loss = loss_weight * self.loss_fn(pred_tensor/torch.sqrt(nAtomsV), target_tensor/torch.sqrt(nAtomsV))
+                case _: raise ValueError('Invalid normalization method.')
         # return the loss
         return loss
 
