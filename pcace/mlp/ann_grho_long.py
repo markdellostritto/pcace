@@ -1,0 +1,297 @@
+#****************************************************
+# Import Statements
+#****************************************************
+
+import itertools
+import numpy as np
+import torch
+from typing import Dict, Union, Sequence, Callable, Optional
+from ..ml import MLP
+from ..tools import scatter_sum
+from .force import get_outputs
+
+#****************************************************
+# Atomic Neural Network
+#****************************************************
+
+"""
+    Atomic Neural Network - Pauli Repulsion
+    Computes properties of a single atom using a neural network
+    The properties are reduced over the total structure
+    Finally, forces are computed as a gradient of the output
+"""
+class ANN_GRho_Long(torch.nn.Module):
+    """
+        n_in: input dimension of representation
+        n_out: output dimension of target property (default: 1)
+        n_hidden: size of hidden layers.
+        activation: the activation function for each layer
+        key_input: the key storing the NN input
+        key_output: the key storing the NN output
+        skip: whether to include a skip connection from input to output
+        linout: whether the output layer has a linear activation function
+    """
+    # ==== initialization ====
+    def __init__(
+        self,
+        # neural network
+        n_in: int = None,
+        n_out: int = 1,
+        n_hidden: Optional[Union[int, Sequence[int]]] = None,
+        activation: Callable = torch.nn.SiLU(),
+        skip: bool = False,
+        linout: bool = True,
+        # constants
+        ke: float = 14.3996454784562,
+        # elements
+        radii: Dict[str,torch.tensor] = None,
+        # kspace
+        rc: float = 0.0,
+        prec: float = 1.0e-6,
+        # keys - input/output
+        key_input: Union[str, Sequence[int]] = 'node_feats',
+        key_output_reduce: str = "q_tot",
+        key_output_node: str = "q",
+        # keys - energy/force
+        key_energy  = "energy_grho_long",
+        key_forces  = "forces_grho_long",
+        key_virials = "virials_grho_long",
+        key_stress  = "stress_grho_long",
+        # calc flags
+        calc_forces  = True,
+        calc_virials = True,
+        calc_stress  = True,
+    ):
+        # == init ==
+        super().__init__()
+
+        # == set nn data ==
+        self.n_in = n_in
+        self.n_out = n_out
+        self.n_hidden = n_hidden
+        self.activation = activation
+
+        # == set kspace ==
+        self.rc = rc
+        self.prec = prec
+        self.ke = ke
+
+        # == set elements ==
+        self.radii = radii
+
+        # == set keys - input/output ==
+        self.key_input = key_input
+        self.key_output_reduce = key_output_reduce
+        self.key_output_node = key_output_node
+
+        # == set keys - input/output ==
+        self.key_energy  = key_energy
+        self.key_forces  = key_forces
+        self.key_virials = key_virials
+        self.key_stress  = key_stress
+
+        # == set calc flags ==
+        self.calc_forces  = calc_forces
+        self.calc_virials = calc_virials
+        self.calc_stress  = calc_stress
+
+        # == make the nn ==
+        self.linout = linout
+        self.outnet = MLP(
+            n_in=self.n_in,
+            n_out=self.n_out,
+            n_hidden=self.n_hidden,
+            activation=self.activation,
+            linout=self.linout,
+        )
+
+        # == make the skip connection ==
+        self.skip = skip
+        if self.skip:
+            self.linear_nn = MLP(
+                self.n_in, 
+                self.n_out,
+                activation=None, 
+            ) 
+        else: self.linear_nn = None
+        
+    # ==== calculation ====
+    def forward(self, 
+        data: Dict[str, torch.Tensor],
+        training: bool = None,
+    ) -> Dict[str, torch.Tensor]:
+        # == check features ==
+        if not hasattr(self, "key_input") or self.key_input is None: self.key_input = "node_feats"
+        if self.key_input not in data: raise ValueError(f"Input key {self.key_input} not found in data dictionary.")
+
+        # == get features ==
+        features = data[self.key_input]
+        # reshape such that each node has its own entry
+        features = features.reshape(features.shape[0], -1)
+
+        # == predict atomic properties ==
+        out_node = self.outnet(features)
+        if self.skip: out_node += self.linear_nn(features)
+        out_node=torch.squeeze(out_node)
+        # == reduce the atomic properties ==
+        out_reduce=scatter_sum(
+            src=out_node,
+            index=data["batch"],
+            dim=0
+        )
+        
+        # == reduce atomic data ==
+        if self.key_output_node is not None: data[self.key_output_node] = out_node
+        data[self.key_output_reduce] = out_reduce
+
+        # == init ==
+        nGraphs = torch.unique(data["batch"],return_counts=False).shape[0]
+        # compute sum over charge, charge squared
+        qs = scatter_sum(src=out_node,index=data["batch"],dim=0)
+        q2s = scatter_sum(src=out_node*out_node,index=data["batch"],dim=0)
+        # compute reciprocal lattice
+        cellR = data['cell'].view(-1, 3, 3)
+        cellK = torch.transpose(2.0*np.pi*torch.linalg.inv(cellR),1,2)
+        vol = torch.linalg.det(cellR)
+        # compute convergence constant
+        kAlphaG = (1.35-0.15*np.log(self.prec))/self.rc
+        #nAtoms = data["positions"].shape[0]
+        #kAlpha0 = self.prec*torch.sqrt(nAtoms*self.rc*vol)/(2.0*q2s)
+        #kAlpha1 = torch.tensor([kAlphaG for _ in range(nGraphs)],device=data["batch"].device)
+        #idxl = kAlpha0 >= 1.0
+        #idxs = kAlpha0 < 1.0
+        #kAlpha = torch.zeros_like(kAlpha0,device=kAlpha0.device)
+        #kAlpha[idxl] = kAlpha1[idxl]
+        #kAlpha[idxs] = torch.sqrt(-torch.log(kAlpha0[idxs]))/self.rc
+        kAlpha = torch.tensor([kAlphaG for _ in range(nGraphs)],device=data["batch"].device)
+        #print("kAlpha = ",kAlpha)
+        # compute reciprocal lattice points
+        nk = [8,8,8] # approximation
+        kpoints = []
+        for ix,iy,iz in itertools.product(range(-nk[0],nk[0]+1), range(-nk[1],nk[1]+1), range(-nk[2],nk[2]+1)):
+            if(np.max(np.abs(np.array([ix,iy,iz])))): kpoints.append([ix,iy,iz])
+        kpoints = torch.tensor(kpoints,device=data["batch"].device)
+        
+        # == compute the energy - constant term ==
+        #print("computing the energy - constant term")
+        vc = -1.0*self.ke*kAlpha/np.sqrt(np.pi)
+        vq = -0.5*self.ke*np.pi/(kAlpha*kAlpha*vol)
+        ec = q2s*vc+qs*qs*vq # [nbatch]
+        #print("ec = ",ec)
+        
+        # == compute the energy - rspace ==
+        #print("computing the energy - rspace term")
+        # compute edge lengths and vectors (normalized)
+        vectors = data["positions"][data["edge_index"][1]] - data["positions"][data["edge_index"][0]] + data["shifts"]  # [n_edges, 3]
+        edge_lengths = torch.linalg.norm(vectors, dim=-1, keepdim=False)  # [n_edges]
+        # compute the gaussian radius
+        radius=torch.tensor(
+            [self.radii[a.item()] for a in data["atomic_numbers"]],
+            device=data["atomic_numbers"].device
+        )
+        gamma=2.0*radius[data["edge_index"][0]]*radius[data["edge_index"][1]]\
+            /(radius[data["edge_index"][0]]+radius[data["edge_index"][1]])
+        # compute the edge energy
+        energy_edge = self.ke\
+            *data[self.key_output_node][data["edge_index"][0]]\
+            *data[self.key_output_node][data["edge_index"][1]]\
+            *(torch.erf(torch.sqrt(0.5*gamma)*edge_lengths)\
+              -torch.erf(kAlpha[data["batch"][data["edge_index"][0]]]*edge_lengths))\
+            *1.0/edge_lengths
+        # compute the node energy
+        n_nodes = data["positions"].shape[0]
+        energy_node = 0.5*scatter_sum(
+            src=energy_edge, 
+            index=data["edge_index"][1], 
+            dim=0, 
+            dim_size=n_nodes
+        )
+        # compute the structure energy
+        er = scatter_sum(
+            src = energy_node,
+            index = data["batch"],
+            dim = 0
+        )
+        #print("er = ",er)
+
+        # == compute the energy - kspace ==
+        #print("computing the energy - kspace term")
+        results = []
+        unique_batches = torch.unique(data["batch"])
+        for i in unique_batches:
+            mask = data["batch"] == i  # Create a mask for the i-th configuration
+            kvecs=(\
+                cellK[i,0,:].unsqueeze(-1)*kpoints[:,0]+\
+                cellK[i,1,:].unsqueeze(-1)*kpoints[:,1]+\
+                cellK[i,2,:].unsqueeze(-1)*kpoints[:,2]\
+            ) # [3,nkvec]
+            knorms2=0.25*torch.linalg.norm(kvecs,dim=0)**2 # [nkvec]
+            kamps=0.5*self.ke*np.pi/vol[i]*torch.exp(-1.0*knorms2/(kAlpha[i]*kAlpha[i]))/knorms2 # [nkvec]
+            rdotk = torch.matmul(data["positions"][mask],kvecs) # [nposn,nkvec]
+            qrdotk = \
+                torch.matmul(out_node[mask],torch.cos(rdotk))**2+\
+                torch.matmul(out_node[mask],torch.sin(rdotk))**2
+            results.append(torch.matmul(kamps,qrdotk))
+        ek = torch.stack(results, dim=0)
+        #print("ek = ",ek)
+
+        # == compute total energy ==
+        data[self.key_energy]=er+ek+ec
+        
+        # == compute the forces ==
+        forces, virials, stress = get_outputs(
+            energy = data[self.key_energy],
+            positions = data['positions'],
+            displacement = data.get('displacement', None),
+            cell = data.get('cell', None),
+            training=training,
+            compute_force = self.calc_forces,
+            compute_virials = self.calc_virials,
+            compute_stress = self.calc_stress
+        )
+        data[self.key_forces] = forces
+        if self.key_virials is not None:
+            data[self.key_virials] = virials
+        if self.key_stress is not None:
+            data[self.key_stress] = stress
+
+        # == return ==
+        return data
+
+    # ==== output ====
+    def __repr__(self):
+        return (
+            f"\n==============================================\n"
+            f"{self.__class__.__name__}\n"
+            # constants
+            f"ke = {self.ke}\n"
+            # calc flags
+            f"calc_forces = {self.calc_forces}\n"
+            f"calc_virials = {self.calc_virials}\n"
+            f"calc_stress = {self.calc_stress}\n"
+            # keys - input/output
+            f"key_input = {self.key_input}\n"
+            f"key_output_reduce = {self.key_output_reduce}\n"
+            f"key_output_node = {self.key_output_node}\n"
+            # keys - energy/force
+            f"key_energy = {self.key_energy}\n"
+            f"key_forces = {self.key_forces}\n"
+            f"key_virials = {self.key_virials}\n"
+            f"key_stress = {self.key_stress}\n"
+            # elements
+            f"radii = {self.radii}\n"
+            # kspace
+            f"rc = {self.rc}\n"
+            f"prec = {self.prec}\n"
+            # neural network
+            f"n_in = {self.n_in}\n"
+            f"n_out = {self.n_out}\n"
+            f"n_hidden = {self.n_hidden}\n"
+            f"activation = {self.activation}\n"
+            f"skip = {self.skip}\n"
+            f"linout = {self.linout}\n"
+            # neural nets
+            f"{self.outnet}\n"
+            f"{self.linear_nn}\n"
+            f"**********************************************"
+        )
