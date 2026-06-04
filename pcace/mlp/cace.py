@@ -4,9 +4,8 @@
 
 import torch
 from torch import nn
-from typing import Sequence, Optional, List, Dict, Any, Callable
+from typing import Sequence, List, Dict, Any
 
-from .ann import ANN
 from .type import (
     NodeEncoder, 
     NodeEmbedder, 
@@ -17,10 +16,6 @@ from ..basis import (
 )
 from ..tools import (
     scatter_sum
-)
-from .force import (
-    get_outputs,
-    get_symmetric_displacement
 )
 
 #*************************************************************************
@@ -43,14 +38,6 @@ class CACE(nn.Module):
         dim_node_embed: int,
         # radial embedding
         dim_radial_embed: int,
-        # neural network
-        n_hidden: Optional[Sequence[int]] = None,
-        activation: Callable = torch.nn.SiLU(),
-        skip: bool = False,
-        # forces
-        calc_forces = True,
-        calc_virials = True,
-        calc_stress = True,
         # message passing
         num_message_passing: int = 0,
         type_message_passing: List[str] = ["M", "Ar", "Bchi"],
@@ -66,9 +53,6 @@ class CACE(nn.Module):
         # == set constants and flags ==
         self.mp_norm_factor = 1.0/(avg_num_neighbors)**0.5 # normalization factor for message passing
         self.keep_node_features_A = keep_node_features_A
-        self.calc_forces = calc_forces
-        self.calc_virials = calc_virials
-        self.calc_stress = calc_stress
         
         # == atomic numbers ==
         self.z_list = z_list # list of all possible elements
@@ -123,15 +107,6 @@ class CACE(nn.Module):
         # == set the input size ==
         self.n_input = self.dim_radial_embed*self.ang_prod.size*self.dim_edge_encode
 
-        # == build the hamiltonian ==
-        self.ann = ANN(
-            n_in = self.n_input,
-            n_out = 1,
-            n_hidden = n_hidden,
-            activation = activation,
-            skip = skip,
-        )
-
         # == device ==
         self.device = device
     
@@ -139,14 +114,12 @@ class CACE(nn.Module):
     def forward(
         self, 
         data: Dict[str, torch.Tensor],
-        training = True,
     ):
-        #print("Cace::forward")
         data["positions"].requires_grad_(True)
         
         # == get the network data ==
         #print("get network data")
-        n_nodes = data['positions'].shape[0]
+        n_nodes = data["positions"].shape[0]
         if data["batch"] == None: batch_now = torch.zeros(n_nodes, dtype=torch.int64, device=self.device)
         else: batch_now = data["batch"]
         try:
@@ -155,27 +128,8 @@ class CACE(nn.Module):
             data["num_graphs"]=1
         #print("n_nodes = ",n_nodes)
         
-        # == get symmetric displacement ==
-        #print("get symmetric displacement")
-        if(self.calc_stress or self.calc_virials):
-            (
-                data["positions"],
-                data["shifts"],
-                data["displacement"],
-                data["cell"]
-            )=get_symmetric_displacement(
-                data["positions"],
-                data["unit_shifts"],
-                data["cell"],
-                data["edge_index"],
-                data["num_graphs"],
-                data["batch"]
-            )
-        else:
-            data["displacement"] = None
-            
         # == node encoding ==
-        node_encoding = self.node_encoder(data['atomic_numbers'])
+        node_encoding = self.node_encoder(data["atomic_numbers"])
         #print("node_encoding = ",node_encoding)
 
         # == node embedding ==
@@ -306,57 +260,24 @@ class CACE(nn.Module):
                     node_T[:, :, lim2, :]
                 )
         data["node_feats"] = node_S
-        #print("sym_node_attr = ",node_S.size())
-        #print("n_input = ",self.n_input)
+        #print("nod_S.size() = ",node_S.size())
         
         # == message passing ==
         # NOTE: TODO
-        
-        # == compute the energy ==
-        #print("batch indices = ",data["batch"])
-        self.ann.forward(data)
-        total_energy=scatter_sum(
-            src=data["node_energy"],
-            index=data["batch"],
-            dim=0
-        )
-        total_energy=torch.squeeze(total_energy,-1)
-        #print("node_energy = ",data["node_energy"])
-        #print("total_energy = ",total_energy)
-        #natoms = torch.bincount(data['batch'])
-        #natomsv = torch.tensor([natoms[b] for b in data["batch"]]).unsqueeze(-1).expand(-1,3)
-
-        # == compute forces ==
-        #print("computing forces")
-        forces, virials, stress = get_outputs(
-            energy = total_energy,
-            positions = data['positions'],
-            displacement = data.get('displacement', None),
-            cell = data.get('cell', None),
-            training=training,
-            compute_force = self.calc_forces,
-            compute_virials = self.calc_virials,
-            compute_stress = self.calc_stress
-        )
-        #print(data["ptr"].numel())
-        #print("forces = ",forces)
-        #print("forces_norm = ",forces/countsv.view(-1,1))
-        #print("stress = ",stress)
-        #print("virials = ",virials)
         
         # == build the output ==
         try: displacement = data["displacement"]
         except: displacement = None
         output = {
             "positions": data["positions"],
-            "energy": total_energy,
+            "edge_index": data["edge_index"],
+            "shifts": data["shifts"],
+            "unit_shifts": data["unit_shifts"],
+            "atomic_numbers": data["atomic_numbers"],
             "cell": data["cell"],
             "displacement": displacement,
             "batch": batch_now,
             "node_feats": node_S,
-            "forces": forces,
-            "virials": virials,
-            "stress": stress,
         }
         
         # == return the output ==
@@ -365,7 +286,7 @@ class CACE(nn.Module):
     # ==== output ====
     def __repr__(self):
         return (
-            f"\n**********************************************\n"
+            f"\n==============================================\n"
             f"{self.__class__.__name__}\n"
             f"z_list = {self.z_list}\n"
             f"order  = {self.order}\n"
@@ -379,11 +300,7 @@ class CACE(nn.Module):
             f"node_encoder = {self.node_encoder}\n"
             f"node_embedder_send = {self.node_embedder_send}\n"
             f"node_embedder_recv = {self.node_embedder_recv}\n"
-            f"calc_forces  = {self.calc_forces}\n"
-            f"calc_virials = {self.calc_virials}\n"
-            f"calc_stress  = {self.calc_stress}\n"
             f"device = {self.device}\n"
             f"{self.rt_weights}\n"
-            f"{self.ann}\n"
             f"**********************************************"
         )
