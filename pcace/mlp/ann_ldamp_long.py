@@ -41,9 +41,9 @@ class ANN_LDamp_Long(torch.nn.Module):
         activation: Callable = torch.nn.SiLU(),
         skip: bool = False,
         linout: bool = True,
+        weight: float = 1.0,
         # elements
         radii: Dict[str,torch.tensor] = None,
-        c6: Dict[str,torch.tensor] = None,
         # kspace
         rc: float = 0.0,
         prec: float = 1.0e-6,
@@ -69,6 +69,7 @@ class ANN_LDamp_Long(torch.nn.Module):
         self.n_out = n_out
         self.n_hidden = n_hidden
         self.activation = activation
+        self.weight = weight
 
         # == set kspace ==
         self.rc = rc
@@ -76,8 +77,7 @@ class ANN_LDamp_Long(torch.nn.Module):
         
         # == set elements ==
         self.radii = radii
-        self.c6 = c6
-
+        
         # == set keys - input/output ==
         self.key_input = key_input
         self.key_output_reduce = key_output_reduce
@@ -128,16 +128,10 @@ class ANN_LDamp_Long(torch.nn.Module):
         # reshape such that each node has its own entry
         features = features.reshape(features.shape[0], -1)
 
-        # == compute c6 ==
-        data["c6"]=torch.tensor(
-            [self.c6[a.item()] for a in data["atomic_numbers"]],
-            device=data["atomic_numbers"].device
-        )
-
         # == predict atomic properties ==
         out_node = self.outnet(features) 
         if self.skip: out_node += self.linear_nn(features)
-        out_node = torch.squeeze(out_node) + data["c6"]
+        out_node = torch.squeeze(out_node)
         # == reduce the atomic properties ==
         out_reduce=scatter_sum(
             src=out_node,
@@ -171,7 +165,7 @@ class ANN_LDamp_Long(torch.nn.Module):
         
         # == compute the energy - constant term ==
         #print("computing the energy - constant term")
-        ec = -1.0/6.0*np.pi**(3.0/2.0)/vol*kAlpha**3*cs*cs+1.0/12.0*kAlpha**6*c2s
+        ec = (-1.0/6.0*np.pi**(3.0/2.0)/vol*kAlpha**3*cs*cs+1.0/12.0*kAlpha**6*c2s)*self.weight
         #print("ec = ",ec)
         
         # == compute the energy - rspace ==
@@ -204,7 +198,7 @@ class ANN_LDamp_Long(torch.nn.Module):
             index=data["edge_index"][1], 
             dim=0, 
             dim_size=n_nodes
-        )
+        )*self.weight
         # compute the structure energy
         er = scatter_sum(
             src = energy_node,
@@ -235,7 +229,7 @@ class ANN_LDamp_Long(torch.nn.Module):
                 torch.matmul(out_node[mask],torch.cos(rdotk))**2+\
                 torch.matmul(out_node[mask],torch.sin(rdotk))**2 # [nkvec]
             results.append(-1.0*torch.matmul(kamps,qrdotk)) #[]
-        ek = torch.stack(results, dim=0)
+        ek = torch.stack(results, dim=0)*self.weight
         #print("ek = ",ek)
 
         # == compute total energy ==
@@ -252,11 +246,11 @@ class ANN_LDamp_Long(torch.nn.Module):
             compute_virials = self.calc_virials,
             compute_stress = self.calc_stress
         )
-        data[self.key_forces] = forces
+        data[self.key_forces] = forces*self.weight
         if self.key_virials is not None:
-            data[self.key_virials] = virials
+            data[self.key_virials] = virials*self.weight
         if self.key_stress is not None:
-            data[self.key_stress] = stress
+            data[self.key_stress] = stress*self.weight
 
         # == return ==
         return data
@@ -284,7 +278,6 @@ class ANN_LDamp_Long(torch.nn.Module):
             f"prec = {self.prec}\n"
             # elements
             f"radii = {self.radii}\n"
-            f"c6 = {self.c6}\n"
             # neural network
             f"n_in = {self.n_in}\n"
             f"n_out = {self.n_out}\n"
@@ -292,6 +285,7 @@ class ANN_LDamp_Long(torch.nn.Module):
             f"activation = {self.activation}\n"
             f"skip = {self.skip}\n"
             f"linout = {self.linout}\n"
+            f"weight = {self.weight}\n"
             # neural nets
             f"{self.outnet}\n"
             f"{self.linear_nn}\n"

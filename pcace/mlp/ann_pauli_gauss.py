@@ -39,6 +39,7 @@ class ANN_Pauli_Gauss(torch.nn.Module):
         activation: Callable = torch.nn.SiLU(),
         skip: bool = False,
         linout: bool = True,
+        weight: float = 1.0,
         # constants
         ke: float = 14.3996454784562, # Coulomb's constant
         # radii
@@ -65,6 +66,7 @@ class ANN_Pauli_Gauss(torch.nn.Module):
         self.n_out = n_out
         self.n_hidden = n_hidden
         self.activation = activation
+        self.weight = weight
 
         # == set radii ==
         self.ke = ke
@@ -168,7 +170,7 @@ class ANN_Pauli_Gauss(torch.nn.Module):
             index=data["edge_index"][1], 
             dim=0, 
             dim_size=n_nodes
-        )
+        )*self.weight
         # compute the structure energy
         data[self.key_energy]=scatter_sum(
             src=energy_node,
@@ -187,11 +189,11 @@ class ANN_Pauli_Gauss(torch.nn.Module):
             compute_virials = self.calc_virials,
             compute_stress = self.calc_stress
         )
-        data[self.key_forces] = forces
+        data[self.key_forces] = forces*self.weight
         if self.key_virials is not None:
-            data[self.key_virials] = virials
+            data[self.key_virials] = virials*self.weight
         if self.key_stress is not None:
-            data[self.key_stress] = stress
+            data[self.key_stress] = stress*self.weight
         
         # == return ==
         return data
@@ -225,6 +227,7 @@ class ANN_Pauli_Gauss(torch.nn.Module):
             f"activation = {self.activation}\n"
             f"skip = {self.skip}\n"
             f"linout = {self.linout}\n"
+            f"weight = {self.weight}\n"
             # neural nets
             f"{self.outnet}\n"
             f"{self.linear_nn}\n"

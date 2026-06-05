@@ -39,6 +39,7 @@ class ANN_SR(torch.nn.Module):
         activation: Callable = torch.nn.SiLU(),
         skip: bool = False,
         linout: bool = True,
+        weight: float = 1.0,
         # keys - input/output
         key_input: Union[str, Sequence[int]] = 'node_feats',
         key_output_reduce: str = "energy_sr",
@@ -61,6 +62,7 @@ class ANN_SR(torch.nn.Module):
         self.n_out = n_out
         self.n_hidden = n_hidden
         self.activation = activation
+        self.weight = weight
 
         # == set keys - input/output ==
         self.key_input = key_input
@@ -129,7 +131,7 @@ class ANN_SR(torch.nn.Module):
         data[self.key_output_reduce] = out_reduce
 
         # == compute the energy ==
-        data[self.key_energy] = out_reduce
+        data[self.key_energy] = out_reduce*self.weight
 
         # == compute the forces ==
         forces, virials, stress = get_outputs(
@@ -142,11 +144,11 @@ class ANN_SR(torch.nn.Module):
             compute_virials = self.calc_virials,
             compute_stress = self.calc_stress
         )
-        data[self.key_forces] = forces
+        data[self.key_forces] = forces*self.weight
         if self.key_virials is not None:
-            data[self.key_virials] = virials
+            data[self.key_virials] = virials*self.weight
         if self.key_stress is not None:
-            data[self.key_stress] = stress
+            data[self.key_stress] = stress*self.weight
         
         # == return ==
         return data
@@ -176,6 +178,7 @@ class ANN_SR(torch.nn.Module):
             f"activation = {self.activation}\n"
             f"skip = {self.skip}\n"
             f"linout = {self.linout}\n"
+            f"weight = {self.weight}\n"
             # neural nets
             f"{self.outnet}\n"
             f"{self.linear_nn}\n"

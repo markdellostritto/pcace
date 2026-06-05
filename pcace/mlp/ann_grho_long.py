@@ -41,6 +41,7 @@ class ANN_GRho_Long(torch.nn.Module):
         activation: Callable = torch.nn.SiLU(),
         skip: bool = False,
         linout: bool = True,
+        weight: float = 1.0,
         # constants
         ke: float = 14.3996454784562,
         # elements
@@ -70,6 +71,7 @@ class ANN_GRho_Long(torch.nn.Module):
         self.n_out = n_out
         self.n_hidden = n_hidden
         self.activation = activation
+        self.weight = weight
 
         # == set kspace ==
         self.rc = rc
@@ -176,7 +178,7 @@ class ANN_GRho_Long(torch.nn.Module):
         #print("computing the energy - constant term")
         vc = -1.0*self.ke*kAlpha/np.sqrt(np.pi)
         vq = -0.5*self.ke*np.pi/(kAlpha*kAlpha*vol)
-        ec = q2s*vc+qs*qs*vq # [nbatch]
+        ec = (q2s*vc+qs*qs*vq)*self.weight # [nbatch]
         #print("ec = ",ec)
         
         # == compute the energy - rspace ==
@@ -205,7 +207,7 @@ class ANN_GRho_Long(torch.nn.Module):
             index=data["edge_index"][1], 
             dim=0, 
             dim_size=n_nodes
-        )
+        )*self.weight
         # compute the structure energy
         er = scatter_sum(
             src = energy_node,
@@ -232,7 +234,7 @@ class ANN_GRho_Long(torch.nn.Module):
                 torch.matmul(out_node[mask],torch.cos(rdotk))**2+\
                 torch.matmul(out_node[mask],torch.sin(rdotk))**2
             results.append(torch.matmul(kamps,qrdotk))
-        ek = torch.stack(results, dim=0)
+        ek = torch.stack(results, dim=0)*self.weight
         #print("ek = ",ek)
 
         # == compute total energy ==
@@ -249,11 +251,11 @@ class ANN_GRho_Long(torch.nn.Module):
             compute_virials = self.calc_virials,
             compute_stress = self.calc_stress
         )
-        data[self.key_forces] = forces
+        data[self.key_forces] = forces*self.weight
         if self.key_virials is not None:
-            data[self.key_virials] = virials
+            data[self.key_virials] = virials*self.weight
         if self.key_stress is not None:
-            data[self.key_stress] = stress
+            data[self.key_stress] = stress*self.weight
 
         # == return ==
         return data
@@ -290,6 +292,7 @@ class ANN_GRho_Long(torch.nn.Module):
             f"activation = {self.activation}\n"
             f"skip = {self.skip}\n"
             f"linout = {self.linout}\n"
+            f"weight = {self.weight}\n"
             # neural nets
             f"{self.outnet}\n"
             f"{self.linear_nn}\n"

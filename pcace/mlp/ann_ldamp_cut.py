@@ -39,9 +39,9 @@ class ANN_LDamp_Cut(torch.nn.Module):
         activation: Callable = torch.nn.SiLU(),
         skip: bool = False,
         linout: bool = True,
+        weight: float = 1.0,
         # elements
         radii: Dict[str,torch.tensor] = None,
-        c6: Dict[str,torch.tensor] = None,
         # keys - input/output
         key_input: Union[str, Sequence[int]] = 'node_feats',
         key_output_reduce: str = "c_tot",
@@ -64,11 +64,11 @@ class ANN_LDamp_Cut(torch.nn.Module):
         self.n_out = n_out
         self.n_hidden = n_hidden
         self.activation = activation
+        self.weight = weight
 
         # == set elements ==
         self.radii = radii
-        self.c6 = c6
-
+        
         # == set keys - input/output ==
         self.key_input = key_input
         self.key_output_reduce = key_output_reduce
@@ -119,16 +119,10 @@ class ANN_LDamp_Cut(torch.nn.Module):
         # reshape such that each node has its own entry
         features = features.reshape(features.shape[0], -1)
 
-        # == compute c6 ==
-        data["c6"]=torch.tensor(
-            [self.c6[a.item()] for a in data["atomic_numbers"]],
-            device=data["atomic_numbers"].device
-        )
-
         # == predict atomic properties ==
         out_node = self.outnet(features) 
         if self.skip: out_node += self.linear_nn(features)
-        out_node = torch.squeeze(out_node) + data["c6"]
+        out_node = torch.squeeze(out_node)
         # == reduce the atomic properties ==
         out_reduce=scatter_sum(
             src=out_node,
@@ -162,7 +156,7 @@ class ANN_LDamp_Cut(torch.nn.Module):
             index=data["edge_index"][1], 
             dim=0, 
             dim_size=n_nodes
-        )
+        )*self.weight
         # compute the structure energy
         data[self.key_energy] = scatter_sum(
             src = energy_node,
@@ -181,11 +175,11 @@ class ANN_LDamp_Cut(torch.nn.Module):
             compute_virials = self.calc_virials,
             compute_stress = self.calc_stress
         )
-        data[self.key_forces] = forces
+        data[self.key_forces] = forces*self.weight
         if self.key_virials is not None:
-            data[self.key_virials] = virials
+            data[self.key_virials] = virials*self.weight
         if self.key_stress is not None:
-            data[self.key_stress] = stress
+            data[self.key_stress] = stress*self.weight
 
         # == return ==
         return data
@@ -210,7 +204,6 @@ class ANN_LDamp_Cut(torch.nn.Module):
             f"key_stress = {self.key_stress}\n"
             # elements
             f"radii = {self.radii}\n"
-            f"c6 = {self.c6}\n"
             # neural network
             f"n_in = {self.n_in}\n"
             f"n_out = {self.n_out}\n"
@@ -218,6 +211,7 @@ class ANN_LDamp_Cut(torch.nn.Module):
             f"activation = {self.activation}\n"
             f"skip = {self.skip}\n"
             f"linout = {self.linout}\n"
+            f"weight = {self.weight}\n"
             # neural nets
             f"{self.outnet}\n"
             f"{self.linear_nn}\n"
