@@ -3,6 +3,7 @@ import logging
 from typing import Dict, List, Tuple, Sequence
 import numpy as np
 import ase
+import ase.io
 from ase import Atoms
 from .. import torch_geometric
 from ..data import Molecule
@@ -19,7 +20,7 @@ class SubsetAtoms:
     valid: Atoms 
     test: Atoms
     cutoff: float
-    data_key: Dict
+    key_data: Dict
     atomic_energies: Dict 
 
 def load_data_loader(
@@ -33,14 +34,14 @@ def load_data_loader(
 
     # set the cutoff, key, and energies
     cutoff = collection.cutoff
-    data_key = collection.data_key
+    key_data = collection.key_data
     atomic_energies = collection.atomic_energies
     
     # make the data loader
     if data_type == 'train':
         loader = torch_geometric.DataLoader(
             dataset=[
-                Molecule.from_atoms(atoms, cutoff=cutoff, data_key=data_key, atomic_energies=atomic_energies)
+                Molecule.from_atoms(atoms, cutoff=cutoff, key_data=key_data, atomic_energies=atomic_energies)
                 for atoms in collection.train
             ],
             batch_size=batch_size,
@@ -50,7 +51,7 @@ def load_data_loader(
     elif data_type == 'valid':
         loader = torch_geometric.DataLoader(
             dataset=[
-                Molecule.from_atoms(atoms, cutoff=cutoff, data_key=data_key, atomic_energies=atomic_energies)
+                Molecule.from_atoms(atoms, cutoff=cutoff, key_data=key_data, atomic_energies=atomic_energies)
                 for atoms in collection.valid
             ],
             batch_size=batch_size,
@@ -60,7 +61,7 @@ def load_data_loader(
     elif data_type == 'test':
         loader = torch_geometric.DataLoader(
             dataset=[
-                Molecule.from_atoms(atoms, cutoff=cutoff, data_key=data_key, atomic_energies=atomic_energies)
+                Molecule.from_atoms(atoms, cutoff=cutoff, key_data=key_data, atomic_energies=atomic_energies)
                 for atoms in collection.test
             ],
             batch_size=batch_size,
@@ -81,7 +82,7 @@ def get_dataset_from_xyz(
     valid_fraction: float = 0.1,
     test_path: str = None,
     seed: int = 1234,
-    data_key: Dict[str, str] = None,
+    key_data: Dict[str, str] = None,
     atomic_energies: Dict[int, float] = None
 ) -> SubsetAtoms:
     all_train_configs = ase.io.read(train_path, index=":")
@@ -112,7 +113,7 @@ def get_dataset_from_xyz(
             f"Loaded {len(test_configs)} test configurations from '{test_path}'"
         )
     return (
-        SubsetAtoms(train=train_configs, valid=valid_configs, test=test_configs, cutoff=cutoff, data_key=data_key, atomic_energies=atomic_energies)
+        SubsetAtoms(train=train_configs, valid=valid_configs, test=test_configs, cutoff=cutoff, key_data=key_data, atomic_energies=atomic_energies)
     )
 
 def random_train_valid_split(
