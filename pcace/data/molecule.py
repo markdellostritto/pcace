@@ -86,18 +86,22 @@ class Molecule(torch_geometric.data.Data):
         cls,
         atoms: Atoms, 
         cutoff: float,
-        data_key: Dict[str, str] = None,
+        key_data: Dict[str, str] = None,
         atomic_energies: Optional[Dict[int, float]] = None,
     ) -> "Molecule":
-        if data_key is not None:
-            data_key = default_data_key.update(data_key)
-        data_key = default_data_key
+        if key_data is not None:
+            key_data = default_data_key.update(key_data)
+        key_data = default_data_key
         
+        # ==== get atoms/posns ====
         positions = atoms.get_positions()
-        pbc = tuple(atoms.get_pbc())
-        cell = np.array(atoms.get_cell())
         atomic_numbers = atoms.get_atomic_numbers()
 
+        # ==== get cell/pbc ====
+        pbc = tuple(atoms.get_pbc())
+        cell = np.array(atoms.get_cell())
+        
+        # ==== get neighbors ====
         edge_index, shifts, unit_shifts = get_neighborhood(
             positions=positions,
             cutoff=cutoff,
@@ -105,25 +109,41 @@ class Molecule(torch_geometric.data.Data):
             cell=cell
         )
 
-        # get total energy
-        energy = atoms.info.get(data_key["energy"], None)  # eV
-        if energy is None and data_key['energy'] == 'energy':
-            try:
-                energy = atoms.get_potential_energy()
-            except:
-                energy = None
-        # subtract atomic energies if available
+        # ==== get energy/force/stress ====
+        # get energy
+        #energy = atoms.info.get(key_data["energy"], None)  # eV
+        #if energy is None and key_data['energy'] == 'energy':
+        #    try:
+        #        energy = atoms.get_potential_energy()
+        #    except:
+        #        energy = None
+        #if atomic_energies and energy is not None:
+        #    energy -= sum(atomic_energies.get(Z, 0) for Z in atomic_numbers)
+        # get force
+        #try:
+        #    forces = atoms.arrays.get(key_data["forces"], None)  # eV / Ang
+        #except:
+        #    if key_data['forces'] == 'forces': forces = atoms.get_forces()
+        #    else: forces = None
+        ## get stress
+        #stress = atoms.info.get(key_data["stress"], None)  # eV / Ang
+        #virials = atoms.info.get(key_data["virials"], None)
+
+        # ==== get energy/force ====
+        energy=atoms.get_potential_energy()
+        forces=atoms.get_forces()
+
+        # ==== remove reference energy if provided ====
         if atomic_energies and energy is not None:
             energy -= sum(atomic_energies.get(Z, 0) for Z in atomic_numbers)
         
-        try:
-            forces = atoms.arrays.get(data_key["forces"], None)  # eV / Ang
-        except:
-            if data_key['forces'] == 'forces': forces = atoms.get_forces()
-            else: forces = None
-        stress = atoms.info.get(data_key["stress"], None)  # eV / Ang
-        virials = atoms.info.get(data_key["virials"], None)
-        
+        # ==== get stress/virials ====
+        try: stress=atoms.get_stress()
+        except: stress=None
+        try: virials = atoms.info.get(key_data["virials"], None)
+        except: virials=None
+
+        # ==== convert to tensors ====
         cell = (
             torch.tensor(cell, dtype=torch.get_default_dtype())
             if cell is not None
@@ -133,25 +153,21 @@ class Molecule(torch_geometric.data.Data):
         )
         forces = (
             torch.tensor(forces, dtype=torch.get_default_dtype())
-            if forces is not None
-            else None
+            if forces is not None else None
         )
         energy = (
             torch.tensor(energy, dtype=torch.get_default_dtype())
-            if energy is not None
-            else None
+            if energy is not None else None
         )
         stress = (
             voigt_to_matrix(
                 torch.tensor(stress, dtype=torch.get_default_dtype())
             ).unsqueeze(0)
-            if stress is not None
-            else None
+            if stress is not None else None
         )
         virials = (
             torch.tensor(virials, dtype=torch.get_default_dtype()).unsqueeze(0)
-            if virials is not None
-            else None
+            if virials is not None else None
         )
 
         return cls(
