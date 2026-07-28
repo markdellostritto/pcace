@@ -23,9 +23,9 @@ class NNP(torch.nn.Module):
         calc_virials = True,
         calc_stress = True,
         # keys - energy/force
-        key_energy = "energy",
-        key_forces = "forces",
-        key_stress = "stress",
+        key_energy = "energy_nnp",
+        key_forces = "forces_nnp",
+        key_stress = "stress_nnp",
     ):
         super().__init__()
         # set representation
