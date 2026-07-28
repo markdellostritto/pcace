@@ -16,25 +16,30 @@ class CACECalculator(Calculator):
         model_path: str or nn.module, path to model
         device: str, device to run on (cuda or cpu)
         compute_stress: bool, whether to compute stress
-        energy_key: str, key for energy in model output
-        forces_key: str, key for forces in model output
+        key_energy: str, key for energy in model output
+        key_forces: str, key for forces in model output
         energy_units_to_eV: float, conversion factor from model energy units to eV
         length_units_to_A: float, conversion factor from model length units to Angstroms
         atomic_energies: dict, dictionary of atomic energies to add to model output
     """
+    # ==== initialization ====
     def __init__(
         self,
         model_path: Union[str, torch.nn.Module],
         device: str,
+        # units
         energy_units_to_eV: float = 1.0,
         length_units_to_A: float = 1.0,
-        compute_stress = False,
-        energy_key: str = 'energy',
-        forces_key: str = 'forces',
-        stress_key: str = 'stress',
-        charge_key: str = None,
         charge_unit: float = 1.0/(90.0474)**0.5, # the standard normal factor in accordance with the cace convention used in ewald.py
-        data_key: dict = None,
+        # flags - calculation
+        compute_stress = False,
+        # keys - calculation
+        key_energy: str = 'energy',
+        key_forces: str = 'forces',
+        key_stress: str = 'stress',
+        key_charge: str = None,
+        key_data: dict  = None,
+        # energies
         atomic_energies: dict = None,
         **kwargs,
     ):
@@ -46,7 +51,7 @@ class CACECalculator(Calculator):
         ]
         self.results = {}
 
-        # load the model
+        # == load the model ==
         if isinstance(model_path, str):
             self.model = torch.load(f=model_path, map_location=device)
         elif isinstance(model_path, torch.nn.Module):
@@ -55,35 +60,35 @@ class CACECalculator(Calculator):
             raise ValueError("model_path must be a string or nn.Module")
         self.model.to(device)
 
-        # initialize the device
+        # == initialize the device ==
         self.device = tools.init_device(device)
 
-        # set the units
+        # == set the units ==
         self.energy_units_to_eV = energy_units_to_eV
         self.length_units_to_A = length_units_to_A
         self.charge_unit = charge_unit
 
-        # set the cutoff 
-        self.cutoff = self.model.cutoff.rc.clone().detach().item()
+        # == set the cutoff ==
+        self.cutoff = self.model.rep.cutoff.rc.clone().detach().item()
         
-        # set atomic energies        
+        # == set atomic energies ==
         self.atomic_energies = atomic_energies
 
-        # set data keys
+        # == set data keys ==
         #print("setting data keys")
         self.compute_stress = compute_stress
         self.model.calc_stress = compute_stress
-        #print("calc_stress = ",self.model.calc_stress)
-        self.energy_key = energy_key 
-        self.forces_key = forces_key
-        self.stress_key = stress_key
-        self.charge_key = charge_key
-        self.data_key = data_key
+        self.key_energy = key_energy 
+        self.key_forces = key_forces
+        self.key_stress = key_stress
+        self.key_charge = key_charge
+        self.key_data   = key_data
 
         # turn off gradients for efficiency
         for param in self.model.parameters():
             param.requires_grad = False
 
+    # ==== calculation ====
     def calculate(self, atoms=None, properties=None, system_changes=all_changes):
         """
         Calculate properties.
@@ -93,16 +98,16 @@ class CACECalculator(Calculator):
         :return:
         """
         #print("calculate")
-        # call to base-class to set atoms attribute
+        # == call to base-class to set atoms attribute ==
         Calculator.calculate(self, atoms)
         
-        # prepare data - make a dataset with only one structure
+        # == prepare data - make a dataset with only one structure ==
         #print("preparing data")
         data_loader = torch_geometric.dataloader.DataLoader(
             dataset=[
                 Molecule.from_atoms(
                     atoms, cutoff=self.cutoff,
-                    data_key=self.data_key,
+                    key_data=self.key_data,
                 )
             ],
             batch_size=1,
@@ -110,38 +115,34 @@ class CACECalculator(Calculator):
             drop_last=False,
         )
 
-        # get the structure in the batch
+        # == get the structure in the batch ==
         #print("getting the next batch")
         batch = next(iter(data_loader)).to(self.device).clone()
 
-        # compute energy, force, stress
+        # == compute energy, force, stress ==
         #print("computing energy, force, stress")
         output = self.model(batch.to_dict(), training=True)
-        energy_output = output[self.energy_key].cpu().detach().numpy()
-        forces_output = output[self.forces_key].cpu().detach().numpy()
+        energy_output = output[self.key_energy].cpu().detach().numpy()
+        forces_output = output[self.key_forces].cpu().detach().numpy()
 
-        # subtract atomic energies if available
+        # == subtract atomic energies if available ==
         #print("subtracting atomic energies")
         if self.atomic_energies:
             e0 = sum(self.atomic_energies.get(Z, 0) for Z in atoms.get_atomic_numbers())
         else:
             e0 = 0.0
         
-        # set energy, force, stress
+        # == set energy, force, stress ==
         #print("setting energy, force, stress")
         self.results["energy"] = (energy_output + e0) * self.energy_units_to_eV
         self.results["forces"] = forces_output * self.energy_units_to_eV / self.length_units_to_A
-        #print("compute_stress = ",self.compute_stress)
-        #print("stress_key = ",self.stress_key)
-        #print("output = ",output)
-        if self.compute_stress and output[self.stress_key] is not None:
-            stress = output[self.stress_key].cpu().detach().numpy()
+        if self.compute_stress and output[self.key_stress] is not None:
+            stress = output[self.key_stress].cpu().detach().numpy()
             # stress has units eng / len^3:
             self.results["stress"] = (
                 stress * (self.energy_units_to_eV / self.length_units_to_A**3)
             )[0]
             self.results["stress"] = full_3x3_to_voigt_6_stress(self.results["stress"])
 
-        # return results
-        #print("return")
+        # == return results ==
         return self.results
