@@ -148,7 +148,15 @@ class CACE(nn.Module):
         #print("edge_encoding = ",edge_encoding)
 
         # == compute edge lengths and vectors (normalized) ==
-        vectors = data["positions"][data["edge_index"][1]] - data["positions"][data["edge_index"][0]] + data["shifts"]  # [n_edges, 3]
+        # When running MD simulations (i.e. LAMMPS) the vectors already exist and 
+        # should not be computed from the positions.  If the vectors are not already
+        # stored, then they must be computed from the positions and edge indices
+        if("vectors" in data): 
+            vectors=data["vectors"] # [n_edges, 3]
+        else: 
+            vectors = data["positions"][data["edge_index"][1]] \
+                - data["positions"][data["edge_index"][0]] \
+                + data["shifts"]  # [n_edges, 3]
         edge_lengths = torch.linalg.norm(vectors, dim=-1, keepdim=True)  # [n_edges, 1]
         edge_vectors = vectors / (edge_lengths + 1e-12)
         
@@ -247,7 +255,7 @@ class CACE(nn.Module):
             for n in range(self.ang_prod.beg(4),self.ang_prod.end(4)):
                 lvec = self.ang_prod.lprod[n]
                 lim0 = torch.arange(self.angular.beg(lvec[0]),self.angular.end(lvec[0]))
-                lim1 = torch.arange(self.angular.beg(lvec[1]),self.angular.end(lvec[1]))
+                #lim1 = torch.arange(self.angular.beg(lvec[1]),self.angular.end(lvec[1]))
                 lim2 = torch.arange(self.angular.beg(lvec[2]),self.angular.end(lvec[2]))
                 lim0p1 = torch.arange(self.angular.beg(lvec[0]+lvec[1]),self.angular.end(lvec[0]+lvec[1]))
                 lim1p2 = torch.arange(self.angular.beg(lvec[1]+lvec[2]),self.angular.end(lvec[1]+lvec[2]))
