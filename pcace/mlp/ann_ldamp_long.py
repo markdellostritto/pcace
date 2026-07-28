@@ -236,7 +236,7 @@ class ANN_LDamp_Long(torch.nn.Module):
         data[self.key_energy]=er+ek+ec
         
         # == compute the forces ==
-        forces, virials, stress = get_outputs(
+        forces, virials, stress, _ = get_outputs(
             energy = data[self.key_energy],
             positions = data['positions'],
             displacement = data.get('displacement', None),

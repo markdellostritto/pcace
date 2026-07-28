@@ -155,7 +155,7 @@ class ANN_London_Cut(torch.nn.Module):
         )
         
         # == compute the forces ==
-        forces, virials, stress = get_outputs(
+        forces, virials, stress, _ = get_outputs(
             energy = data[self.key_energy],
             positions = data['positions'],
             displacement = data.get('displacement', None),
