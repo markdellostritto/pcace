@@ -126,7 +126,7 @@ class ANN_SR(torch.nn.Module):
         )
         out_reduce=torch.squeeze(out_reduce,-1)
 
-        # == reduce atomic data ==
+        # == store atomic data ==
         if self.key_output_node is not None: data[self.key_output_node] = out_node
         data[self.key_output_reduce] = out_reduce
 
@@ -134,7 +134,7 @@ class ANN_SR(torch.nn.Module):
         data[self.key_energy] = out_reduce*self.weight
 
         # == compute the forces ==
-        forces, virials, stress = get_outputs(
+        forces, virials, stress, _ = get_outputs(
             energy = data[self.key_energy],
             positions = data['positions'],
             displacement = data.get('displacement', None),
