@@ -5,7 +5,7 @@ from typing import Optional, Dict, Sequence
 from .. import torch_geometric
 from .neighborhood import get_neighborhood
 
-default_data_key = {
+key_data_default = {
     "energy": "energy",
     "forces": "forces",
     "stress": "stress",
@@ -90,18 +90,21 @@ class Molecule(torch_geometric.data.Data):
         atomic_energies: Optional[Dict[int, float]] = None,
     ) -> "Molecule":
         if key_data is not None:
-            key_data = default_data_key.update(key_data)
-        key_data = default_data_key
-        
+            key_data = key_data_default.update(key_data)
+        key_data = key_data_default
+
         # ==== get atoms/posns ====
+        #print("getting atoms/posns")
         positions = atoms.get_positions()
         atomic_numbers = atoms.get_atomic_numbers()
 
         # ==== get cell/pbc ====
+        #print("getting cell/pbc")
         pbc = tuple(atoms.get_pbc())
         cell = np.array(atoms.get_cell())
-        
+                
         # ==== get neighbors ====
+        #print("getting neighbors")
         edge_index, shifts, unit_shifts = get_neighborhood(
             positions=positions,
             cutoff=cutoff,
@@ -110,40 +113,29 @@ class Molecule(torch_geometric.data.Data):
         )
 
         # ==== get energy/force/stress ====
-        # get energy
-        #energy = atoms.info.get(key_data["energy"], None)  # eV
-        #if energy is None and key_data['energy'] == 'energy':
-        #    try:
-        #        energy = atoms.get_potential_energy()
-        #    except:
-        #        energy = None
-        #if atomic_energies and energy is not None:
-        #    energy -= sum(atomic_energies.get(Z, 0) for Z in atomic_numbers)
-        # get force
-        #try:
-        #    forces = atoms.arrays.get(key_data["forces"], None)  # eV / Ang
-        #except:
-        #    if key_data['forces'] == 'forces': forces = atoms.get_forces()
-        #    else: forces = None
-        ## get stress
-        #stress = atoms.info.get(key_data["stress"], None)  # eV / Ang
-        #virials = atoms.info.get(key_data["virials"], None)
-
-        # ==== get energy/force ====
-        energy=atoms.get_potential_energy()
-        forces=atoms.get_forces()
-
-        # ==== remove reference energy if provided ====
+        #print("getting energy/force/stress")
+        # get total energy
+        energy = atoms.info.get(key_data["energy"], None)  # eV
+        if energy is None and key_data['energy'] == 'energy':
+            try:
+                energy = atoms.get_potential_energy()
+            except:
+                energy = None
+        # subtract atomic energies if available
         if atomic_energies and energy is not None:
             energy -= sum(atomic_energies.get(Z, 0) for Z in atomic_numbers)
+        # get force
+        try:
+            forces = atoms.arrays.get(key_data["forces"], None)  # eV / Ang
+        except:
+            if key_data['forces'] == 'forces': forces = atoms.get_forces()
+            else: forces = None
+        # get stress
+        stress = atoms.info.get(key_data["stress"], None)  # eV / Ang
+        virials = atoms.info.get(key_data["virials"], None)
         
-        # ==== get stress/virials ====
-        try: stress=atoms.get_stress()
-        except: stress=None
-        try: virials = atoms.info.get(key_data["virials"], None)
-        except: virials=None
-
         # ==== convert to tensors ====
+        #print("converting to tensors")
         cell = (
             torch.tensor(cell, dtype=torch.get_default_dtype())
             if cell is not None

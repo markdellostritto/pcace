@@ -18,7 +18,7 @@ __all__ = [
 class SubsetAtoms:
     train: Atoms
     valid: Atoms 
-    test: Atoms
+    test:  Atoms
     cutoff: float
     key_data: Dict
     atomic_energies: Dict 
@@ -113,7 +113,14 @@ def get_dataset_from_xyz(
             f"Loaded {len(test_configs)} test configurations from '{test_path}'"
         )
     return (
-        SubsetAtoms(train=train_configs, valid=valid_configs, test=test_configs, cutoff=cutoff, key_data=key_data, atomic_energies=atomic_energies)
+        SubsetAtoms(
+            train=train_configs, 
+            valid=valid_configs, 
+            test=test_configs, 
+            cutoff=cutoff, 
+            key_data=key_data, 
+            atomic_energies=atomic_energies
+        )
     )
 
 def random_train_valid_split(
