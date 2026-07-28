@@ -154,9 +154,11 @@ class TrainingTask(nn.Module):
             batch.to(self.device)
             batch_dict = batch.to_dict()
             if self.ema and self.global_step >= self.ema_start:
-                pred = self.ema_model(batch_dict, training=False)
+                #pred = self.ema_model(batch_dict, training=False)
+                pred = self.ema_model(batch_dict, training=True)
             else:
-                pred = self.model(batch_dict, training=False)
+                #pred = self.model(batch_dict, training=False)
+                pred = self.model(batch_dict, training=True)
             loss = (self.loss_fn(pred, batch_dict, {'epochs': self.global_step, 'training': False})).cpu().detach().numpy()
             total_loss += loss.item()
             self.log_metrics('val', pred, batch_dict)
