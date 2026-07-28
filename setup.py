@@ -8,9 +8,9 @@ setup(
     description='Cartesian Multilayer Atomic Cluster Expansion Machine Learning Potential',
     packages=find_packages(),
     install_requires=[
-        'numpy',
-        'ase',
-        'torch',
+        'numpy==1.26.4',
+        'ase==3.22.1',
+        'torch==2.6.0',
     ],
     classifiers=[
         'Programming Language :: Python :: 3',
