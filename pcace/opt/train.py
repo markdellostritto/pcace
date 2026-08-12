@@ -54,7 +54,8 @@ class TrainingTask(nn.Module):
             # AveragedModel is kinda new in torch so there's a fall back
             try:
                 self.ema_model = torch.optim.swa_utils.AveragedModel(self.model, \
-                    multi_avg_fn=torch.optim.swa_utils.get_ema_multi_avg_fn(ema_decay))
+                    multi_avg_fn = torch.optim.swa_utils.get_ema_multi_avg_fn(ema_decay)
+                )
             except:
                 ema_avg = lambda averaged_model_parameter, model_parameter, num_averaged: \
                     ema_decay * averaged_model_parameter + (1-ema_decay) * model_parameter
@@ -249,7 +250,6 @@ class TrainingTask(nn.Module):
         torch.save({
             'model_state_dict': self.model.state_dict(),
             'model_ema_state_dict': self.ema_model.state_dict() if self.ema and self.global_step >= self.ema_start else None,
-            #'model_swa_state_dict': self.swa_model.state_dict() if self.swa and self.global_step >= self.swa_start else None,
             'optimizer_state_dict': self.optimizer.state_dict(),
             'scheduler_state_dict': self.scheduler.state_dict() if self.scheduler else None,
         }, path)
