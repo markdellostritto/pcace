@@ -16,8 +16,6 @@ class CACECalculator(Calculator):
         model_path: str or nn.module, path to model
         device: str, device to run on (cuda or cpu)
         compute_stress: bool, whether to compute stress
-        key_energy: str, key for energy in model output
-        key_forces: str, key for forces in model output
         energy_units_to_eV: float, conversion factor from model energy units to eV
         length_units_to_A: float, conversion factor from model length units to Angstroms
         atomic_energies: dict, dictionary of atomic energies to add to model output
@@ -34,10 +32,6 @@ class CACECalculator(Calculator):
         # flags - calculation
         compute_stress = False,
         # keys - calculation
-        key_energy: str = 'energy',
-        key_forces: str = 'forces',
-        key_stress: str = 'stress',
-        key_charge: str = None,
         key_data: dict  = None,
         # energies
         atomic_energies: dict = None,
@@ -77,11 +71,7 @@ class CACECalculator(Calculator):
         # == set data keys ==
         #print("setting data keys")
         self.compute_stress = compute_stress
-        self.model.calc_stress = compute_stress
-        self.key_energy = key_energy 
-        self.key_forces = key_forces
-        self.key_stress = key_stress
-        self.key_charge = key_charge
+        self.model.compute_stress = compute_stress
         self.key_data   = key_data
 
         # turn off gradients for efficiency
@@ -89,7 +79,11 @@ class CACECalculator(Calculator):
             param.requires_grad = False
 
     # ==== calculation ====
-    def calculate(self, atoms=None, properties=None, system_changes=all_changes):
+    def calculate(self, 
+        atoms=None,
+        properties=None, 
+        system_changes=all_changes
+    ):
         """
         Calculate properties.
         :param atoms: ase.Atoms object
@@ -106,7 +100,8 @@ class CACECalculator(Calculator):
         data_loader = torch_geometric.dataloader.DataLoader(
             dataset=[
                 Molecule.from_atoms(
-                    atoms, cutoff=self.cutoff,
+                    atoms,
+                    cutoff=self.cutoff,
                     key_data=self.key_data,
                 )
             ],
@@ -121,9 +116,12 @@ class CACECalculator(Calculator):
 
         # == compute energy, force, stress ==
         #print("computing energy, force, stress")
-        output = self.model(batch.to_dict(), training=True)
-        energy_output = output[self.key_energy].cpu().detach().numpy()
-        forces_output = output[self.key_forces].cpu().detach().numpy()
+        output = self.model(
+            batch.to_dict(),
+            training=True
+        )
+        energy_output = output[self.model.key_energy].cpu().detach().numpy()[0]
+        forces_output = output[self.model.key_forces].cpu().detach().numpy()
 
         # == subtract atomic energies if available ==
         #print("subtracting atomic energies")
@@ -136,8 +134,8 @@ class CACECalculator(Calculator):
         #print("setting energy, force, stress")
         self.results["energy"] = (energy_output + e0) * self.energy_units_to_eV
         self.results["forces"] = forces_output * self.energy_units_to_eV / self.length_units_to_A
-        if self.compute_stress and output[self.key_stress] is not None:
-            stress = output[self.key_stress].cpu().detach().numpy()
+        if self.compute_stress and output[self.model.key_stress] is not None:
+            stress = output[self.model.key_stress].cpu().detach().numpy()
             # stress has units eng / len^3:
             self.results["stress"] = (
                 stress * (self.energy_units_to_eV / self.length_units_to_A**3)
