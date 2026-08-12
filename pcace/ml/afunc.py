@@ -5,7 +5,6 @@ class SoftPlusZero(torch.nn.Module):
     # ==== initialization ====
     def __init__(self):
         super(SoftPlusZero, self).__init__()
-
     # ==== calculation ====
     def forward(self, x):
         return torch.log1p(torch.exp(x))-np.log(2.0)
@@ -14,11 +13,28 @@ class SquarePlusZero(torch.nn.Module):
     # ==== initialization ====
     def __init__(self):
         super(SquarePlusZero, self).__init__()
-
     # ==== calculation ====
     def forward(self, x):
         return 0.5*(x-1.0+torch.sqrt(1.0+x*x))
-    
+
+class LogCosh(torch.nn.Module):
+    # ==== initialization ====
+    def __init__(self):
+        super(LogCosh, self).__init__()
+    # ==== calculation ====
+    def forward(self, x):
+        #return 0.5*(x+torch.log(torch.cosh(x))) # can yield NAN gradient
+        return 0.5*(torch.nn.functional.softplus(2.0*x)-np.log(2.0))
+        
+class IERF(torch.nn.Module):
+    # ==== initialization ====
+    def __init__(self):
+        super(IERF, self).__init__()
+    # ==== calculation ====
+    def forward(self, x):
+        return 0.5*(x*(torch.erf(x)+1.0)+(torch.exp(-x*x)-1.0)/np.sqrt(np.pi))
+
+"""
 class IERFFunction(torch.autograd.Function):
     @staticmethod
     def forward(ctx, input, c=1.0):
@@ -63,3 +79,4 @@ class IERF(torch.nn.Module):
     def forward(self, x):
         return IERFFunction.apply(x, self.c)
 
+"""
