@@ -6,7 +6,7 @@ import torch
 from typing import Dict, Union, Sequence, Callable, Optional
 from ..ml import MLP
 from ..tools import scatter_sum
-from .force import get_outputs
+from .force import get_outputs, get_forces
 
 #****************************************************
 # Atomic Neural Network
@@ -51,10 +51,7 @@ class ANN_LDamp_Cut(torch.nn.Module):
         key_forces  = "forces_ldamp_cut",
         key_virials = "virials_ldamp_cut",
         key_stress  = "stress_ldamp_cut",
-        # calc flags
-        calc_forces  = True,
-        calc_virials = True,
-        calc_stress  = True,
+        key_forces_edge = "forces_edge_ldamp_cut",
     ):
         # == init ==
         super().__init__()
@@ -79,11 +76,7 @@ class ANN_LDamp_Cut(torch.nn.Module):
         self.key_forces  = key_forces
         self.key_virials = key_virials
         self.key_stress  = key_stress
-
-        # == set calc flags ==
-        self.calc_forces  = calc_forces
-        self.calc_virials = calc_virials
-        self.calc_stress  = calc_stress
+        self.key_forces_edge = key_forces_edge
 
         # == make the nn ==
         self.linout = linout
@@ -109,6 +102,10 @@ class ANN_LDamp_Cut(torch.nn.Module):
     def forward(self, 
         data: Dict[str, torch.Tensor],
         training: bool = None,
+        compute_forces: bool = True,
+        compute_virials: bool = True,
+        compute_stress: bool = True,
+        compute_forces_edge: bool = False,
     ) -> Dict[str, torch.Tensor]:
         # == check features ==
         if not hasattr(self, "key_input") or self.key_input is None: self.key_input = "node_feats"
@@ -142,15 +139,14 @@ class ANN_LDamp_Cut(torch.nn.Module):
             device=data["atomic_numbers"].device
         )
         rvdw=0.5*(data["radius_vdw"][data["edge_index"][0]]+data["radius_vdw"][data["edge_index"][1]])
-        # compute edge lengths and vectors (normalized)
-        vectors = data["positions"][data["edge_index"][1]] - data["positions"][data["edge_index"][0]] + data["shifts"]  # [n_edges, 3]
-        edge_lengths = torch.linalg.norm(vectors, dim=-1, keepdim=False)  # [n_edges]
+        # compute edge lengths 
+        edge_lengths = torch.linalg.norm(data["vectors"], dim=-1, keepdim=False)  # [n_edges]
         # compute the edge energy
         energy_edge = -1.0\
             *data[self.key_output_node][data["edge_index"][0]]\
             *data[self.key_output_node][data["edge_index"][1]]\
             *1.0/(edge_lengths**6+rvdw**6)
-        n_nodes = data["positions"].shape[0]
+        n_nodes = data["atomic_numbers"].shape[0]
         energy_node = 0.5*scatter_sum(
             src=energy_edge, 
             index=data["edge_index"][1], 
@@ -165,22 +161,33 @@ class ANN_LDamp_Cut(torch.nn.Module):
         )
         
         # == compute the forces ==
-        forces, virials, stress, _ = get_outputs(
-            energy = data[self.key_energy],
-            positions = data['positions'],
-            displacement = data.get('displacement', None),
-            cell = data.get('cell', None),
-            training=training,
-            compute_force = self.calc_forces,
-            compute_virials = self.calc_virials,
-            compute_stress = self.calc_stress
-        )
-        data[self.key_forces] = forces*self.weight
-        if self.key_virials is not None:
-            data[self.key_virials] = virials*self.weight
-        if self.key_stress is not None:
-            data[self.key_stress] = stress*self.weight
-
+        if not compute_forces_edge:
+            # compute node forces directly from positions
+            forces, virials, stress = get_outputs(
+                energy = data[self.key_energy],
+                positions = data['positions'],
+                displacement = data.get('displacement', None),
+                cell = data.get('cell', None),
+                training = training,
+                compute_forces = compute_forces,
+                compute_virials = compute_virials,
+                compute_stress = compute_stress
+            )
+            if compute_forces:
+                data[self.key_forces] = forces*self.weight
+            if compute_virials:
+                data[self.key_virials] = virials*self.weight
+            if compute_stress:
+                data[self.key_stress] = stress*self.weight
+        else:
+            # compute edge forces from edge vectors
+            forces_edge = get_forces(
+                energy = data[self.key_energy],
+                positions = data['vectors'],
+                training = training,
+            ) * -1 # Match LAMMPS sign convention
+            data[self.key_forces_edge] = forces_edge*self.weight
+        
         # == return ==
         return data
 
@@ -189,10 +196,6 @@ class ANN_LDamp_Cut(torch.nn.Module):
         return (
             f"\n==============================================\n"
             f"{self.__class__.__name__}\n"
-            # calc flags
-            f"calc_forces = {self.calc_forces}\n"
-            f"calc_virials = {self.calc_virials}\n"
-            f"calc_stress = {self.calc_stress}\n"
             # keys - input/output
             f"key_input = {self.key_input}\n"
             f"key_output_reduce = {self.key_output_reduce}\n"
@@ -202,6 +205,7 @@ class ANN_LDamp_Cut(torch.nn.Module):
             f"key_forces = {self.key_forces}\n"
             f"key_virials = {self.key_virials}\n"
             f"key_stress = {self.key_stress}\n"
+            f"key_forces_edge = {self.key_forces_edge}\n"
             # elements
             f"radii = {self.radii}\n"
             # neural network
