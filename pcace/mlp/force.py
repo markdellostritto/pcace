@@ -12,19 +12,17 @@ from typing import Optional, List, Tuple
 def get_outputs(
     energy: torch.Tensor,
     positions: torch.Tensor,
-    cell: Optional[torch.Tensor] = None,
     displacement: Optional[torch.Tensor] = None,
-    vectors: Optional[torch.Tensor] = None,
+    cell: Optional[torch.Tensor] = None,
     training: bool = False,
-    compute_force: bool = True,
+    compute_forces: bool = True,
     compute_virials: bool = True,
     compute_stress: bool = True,
-    compute_edge_forces: bool = False,
 ) -> Tuple[Optional[torch.Tensor], Optional[torch.Tensor], Optional[torch.Tensor]]:
     # compute total force/stress by taking gradient w.r.t. atomic position
     if (compute_virials or compute_stress) and displacement is not None:
         #print("computing stress and virials")
-        forces, virials, stress = compute_forces_virials(
+        forces, virials, stress = get_forces_virials(
             energy=energy,
             positions=positions,
             displacement=displacement,
@@ -32,30 +30,42 @@ def get_outputs(
             compute_stress=compute_stress,
             training=training,
         )
-    elif compute_force:
+    elif compute_forces:
         #print("computing force only")
         forces, virials, stress = (
-            compute_forces(energy=energy, positions=positions, training=training),
+            get_forces(
+                energy=energy, 
+                positions=positions, 
+                training=training
+            ),
             None,
             None,
         )
     else:
         forces, virials, stress = (None, None, None)
-    # compute force associated with each edge by taking gradient w.r.t. edge vectors
-    # this is needed for integration with LAMMPS ML-IAP
-    if compute_edge_forces and vectors is not None:
-        edge_forces = compute_forces(
-            energy=energy,
-            positions=vectors,
-            training=training,
-        )
-    if edge_forces is not None:
-            edge_forces = -1 * edge_forces  # Match LAMMPS sign convention
     # return
     return forces, virials, stress
 
-def compute_forces(
-    energy: torch.Tensor, positions: torch.Tensor, training: bool = False
+"""
+    get_forces
+    Compute the forces from the inputs using autograd.
+    Arguments:
+    energy - The energy yielded by a given ANN.  This may be computed directly from
+        the output of the NN, or it may be transformed from the output of the network, 
+        i.e. if the network yields an atomic charge or coefficient which is used in a
+        function to compute the energy.
+    positions - The inputs to the ANN used to compute the energy.  This can be the atomic
+        positions, however, this can also be the edge vectors between the atoms.  In these
+        cases different forces are produced.  If the inputs are positions than the ouput is
+        the total force on each atom.  If the inputs are the edge vectors than the ouput is
+        a list of all forces between atoms (the "edge forces").
+    training - Whether the ANN is bein trained, thereby ensuring that the graph is not 
+        destroyed and that a graph for the second derivative is created during training.
+"""
+def get_forces(
+    energy: torch.Tensor,
+    positions: torch.Tensor,
+    training: bool = False
 ) -> torch.Tensor:
     grad_outputs: List[Optional[torch.Tensor]] = [torch.ones_like(energy)]
     gradient = torch.autograd.grad(
@@ -67,9 +77,27 @@ def compute_forces(
         allow_unused=True,  # allows gradients for non-mathematical connections
     )[0]  # [n_nodes, 3]
     if gradient is None: return torch.zeros_like(positions)
-    return -1 * gradient
+    else: return -1 * gradient
 
-def compute_forces_virials(
+"""
+    get_forces_virials
+    Compute the forces, virials, and stress of a given system.
+    Argument:
+    energy - The energy yielded by a given ANN.  This may be computed directly from
+        the output of the NN, or it may be transformed from the output of the network, 
+        i.e. if the network yields an atomic charge or coefficient which is used in a
+        function to compute the energy.
+    positions - The inputs to the ANN used to compute the energy, importantly assuming
+        that the inputs are in fact the atomic positions.  Unlike "get_forces", here we must
+        assume that the inputs are positions, otherwise the calculation of the stress does
+        not make mathematical sense.
+    displacements - ?
+    cell - The unit cell matrices.
+    training - Whether the ANN is bein trained, thereby ensuring that the graph is not 
+            destroyed and that a graph for the second derivative is created during training.
+    compute_stress - Whether the total stress is computed along with the forces and virials.
+"""
+def get_forces_virials(
     energy: torch.Tensor,
     positions: torch.Tensor,
     displacement: torch.Tensor,
