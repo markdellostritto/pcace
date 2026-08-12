@@ -2,7 +2,7 @@ import torch
 import logging
 
 def init_device(device_str: str) -> torch.device:
-    # cuda
+    # == cuda ==
     if device_str == "cuda":
         assert torch.cuda.is_available(), "No CUDA device available!"
         logging.info(
@@ -10,12 +10,12 @@ def init_device(device_str: str) -> torch.device:
         )
         torch.cuda.init()
         return torch.device("cuda")
-    # mps
+    # == mps ==
     if device_str == "mps":
         assert torch.backends.mps.is_available(), "No MPS backend is available!"
         logging.info("Using MPS GPU acceleration")
         return torch.device("mps")
-    # cpu
+    # == cpu ==
     if device_str == "cpu":
         logging.info("Using CPU")
         return torch.device("cpu")

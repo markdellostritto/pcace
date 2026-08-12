@@ -42,19 +42,21 @@ def get_unique_atomic_number(atoms_list: List[Atoms]) -> List[int]:
     returns dictionary of E0s
 """
 def compute_average_E0s(
-    atom_list: Atoms, zs: List[int] = None, energy_key: str = "energy"
+    atom_list: Atoms, 
+    zs: List[int] = None, 
+    key_energy: str = "energy"
 ) -> Dict[int, float]:
     len_xyz = len(atom_list)
+    # get the atomic numbers
     if zs is None:
         zs = get_unique_atomic_number(atom_list)
         zs.sort() # sort by atomic number
     len_zs = len(zs)
-
+    
     A = np.zeros((len_xyz, len_zs))
     B = np.zeros(len_xyz)
     for i in range(len_xyz):
-        B[i] = atom_list[i].info[energy_key]
-        #B[i] = atom_list[i].get_potential_energy()
+        B[i] = atom_list[i].info[key_energy]
         for j, z in enumerate(zs):
             A[i, j] = np.count_nonzero(atom_list[i].get_atomic_numbers() == z)
     try:
