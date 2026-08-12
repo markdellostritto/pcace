@@ -6,10 +6,10 @@ from .. import torch_geometric
 from .neighborhood import get_neighborhood
 
 key_data_default = {
-    "energy": "energy",
-    "forces": "forces",
-    "stress": "stress",
-    "virials": "virials",
+    "energy": "energy_ref",
+    "forces": "forces_ref",
+    "stress": "stress_ref",
+    "virials": "virials_ref",
 }
 
 class Molecule(torch_geometric.data.Data):
@@ -90,9 +90,10 @@ class Molecule(torch_geometric.data.Data):
         atomic_energies: Optional[Dict[int, float]] = None,
     ) -> "Molecule":
         if key_data is not None:
-            key_data = key_data_default.update(key_data)
-        key_data = key_data_default
-
+            key_data = key_data_default | key_data
+        else:
+            key_data = key_data_default
+        
         # ==== get atoms/posns ====
         #print("getting atoms/posns")
         positions = atoms.get_positions()
@@ -112,27 +113,24 @@ class Molecule(torch_geometric.data.Data):
             cell=cell
         )
 
-        # ==== get energy/force/stress ====
-        #print("getting energy/force/stress")
-        # get total energy
+        # ==== get energy/force ====
+        #print("getting energy/force")
+        if(key_data["energy"] == "energy"): raise Exception('\"energy\" not allowed as energy key')
         energy = atoms.info.get(key_data["energy"], None)  # eV
-        if energy is None and key_data['energy'] == 'energy':
-            try:
-                energy = atoms.get_potential_energy()
-            except:
-                energy = None
-        # subtract atomic energies if available
+        if(key_data["forces"] == "forces"): raise Exception('\"forces\" not allowed as forces key')
+        forces = atoms.arrays.get(key_data["forces"], None)  # eV / Ang
+        
+        # ==== remove reference energy if provided ====
+        #print("removing reference energies")
         if atomic_energies and energy is not None:
             energy -= sum(atomic_energies.get(Z, 0) for Z in atomic_numbers)
-        # get force
-        try:
-            forces = atoms.arrays.get(key_data["forces"], None)  # eV / Ang
-        except:
-            if key_data['forces'] == 'forces': forces = atoms.get_forces()
-            else: forces = None
-        # get stress
-        stress = atoms.info.get(key_data["stress"], None)  # eV / Ang
-        virials = atoms.info.get(key_data["virials"], None)
+        
+        # ==== get stress/virials ====
+        #print("getting stress/virials")
+        if(key_data["stress"] == "stress"): raise Exception('\"stress\" not allowed as stress key')
+        stress = atoms.info.get(key_data["stress"], None)  # eV / Ang^3
+        if(key_data["virials"] == "virials"): raise Exception('\"virials\" not allowed as virials key')
+        virials = atoms.info.get(key_data["virials"], None)  # eV
         
         # ==== convert to tensors ====
         #print("converting to tensors")
@@ -162,6 +160,7 @@ class Molecule(torch_geometric.data.Data):
             if virials is not None else None
         )
 
+        # ==== return the class ====
         return cls(
             edge_index=torch.tensor(edge_index, dtype=torch.long),
             positions=torch.tensor(positions, dtype=torch.get_default_dtype()),
