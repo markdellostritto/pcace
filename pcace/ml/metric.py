@@ -26,26 +26,26 @@ def compute_loss_metrics(metric: str, y_true: torch.Tensor, y_pred: torch.Tensor
 class Metrics(torch.nn.Module):
     #==== initialization ====
     """
-        target_name: name of the target in the dataset
-        predict_name: name of the prediction in the model output
-        name: name of the metrics
-        metric_keys: list of metrics to be calculated
+        name_target: name of the target in the dataset
+        name_predict: name of the prediction in the model output
+        name_metric: name of the metrics
+        keys_metric: list of metrics to be calculated
         per_atom: whether to calculate the metrics per atom
     """
     def __init__(
         self,
-        target_name: str,
-        predict_name: Optional[str] = None,
-        name: Optional[str] = None,
-        metric_keys: List[str] = ["mae", "rmse"],
+        name_target: str,
+        name_predict: Optional[str] = None,
+        name_metric: Optional[str] = None,
+        keys_metric: List[str] = ["mae", "rmse"],
         per_atom: bool = False,
     ):
         super().__init__()
-        self.target_name = target_name
-        self.predict_name = predict_name or target_name
-        self.name = name or target_name
+        self.name_target = name_target
+        self.name_predict = name_predict or name_target
+        self.name_metric = name_metric or name_target
         self.per_atom = per_atom
-        self.metric_keys = metric_keys
+        self.keys_metric = keys_metric
         self.logs = {
             "train": {'pred': [], 'target': []},
             "val": {'pred': [], 'target': []},
@@ -57,15 +57,15 @@ class Metrics(torch.nn.Module):
         pred: Dict[str, torch.Tensor],
         target: Optional[Dict[str, torch.Tensor]] = None,
     ):
-        pred_tensor = pred[self.predict_name].clone().detach()
+        pred_tensor = pred[self.name_predict].clone().detach()
         if len(pred_tensor.shape) > 2:
             pred_tensor = pred_tensor.reshape(pred_tensor.shape[0], -1)
         if target is not None:
-            target_tensor = target[self.target_name].clone().detach()
-        elif self.predict_name != self.target_name:
-            target_tensor = pred[self.target_name].clone().detach()
+            target_tensor = target[self.name_target].clone().detach()
+        elif self.name_predict != self.name_target:
+            target_tensor = pred[self.name_target].clone().detach()
         else:
-            raise ValueError("Target is None and predict_name is not equal to target_name")
+            raise ValueError("Target is None and name_predict is not equal to name_target")
         if self.per_atom:
             n_atoms = torch.bincount(target['batch']).clone().detach()
             pred_tensor = pred_tensor / n_atoms
@@ -78,10 +78,10 @@ class Metrics(torch.nn.Module):
         target: Optional[Dict[str, torch.Tensor]] = None,
     ):
         pred_tensor, target_tensor = self._collect_tensor(pred, target)
-        metrics_now = {}
-        for metric in self.metric_keys:
-            metrics_now[metric] = compute_loss_metrics(metric, target_tensor, pred_tensor)
-        return metrics_now
+        metrics = {}
+        for metric in self.keys_metric:
+            metrics[metric] = compute_loss_metrics(metric, target_tensor, pred_tensor)
+        return metrics
 
     #==== metric updater ====
     def update_metrics(self, subset: str, 
@@ -93,20 +93,24 @@ class Metrics(torch.nn.Module):
         self.logs[subset]['target'].append(target_tensor)
 
     def retrieve_metrics(self, subset: str, clear: bool = True, print_log: bool = True):
+        # get tensors
         pred_tensor = torch.cat(self.logs[subset]['pred'], dim=0)
         target_tensor = torch.cat(self.logs[subset]['target'], dim=0)
+        # check tensors
         assert pred_tensor.shape == target_tensor.shape, f"pred_tensor.shape: {pred_tensor.shape}, target_tensor.shape: {target_tensor.shape}"
         if pred_tensor.shape[0] == 0: raise ValueError("No data in the logs")
-        metrics_now = {}
-        for metric in self.metric_keys:
+        # compute metrics
+        metrics = {}
+        for metric in self.keys_metric:
             metric_mean = compute_loss_metrics(metric, target_tensor, pred_tensor)
-            metrics_now[metric] = metric_mean
+            metrics[metric] = metric_mean
             if print_log:
-                print(f'{subset}_{self.name}_{metric}: {metric_mean:.6f}',)
-            logging.info(f'{subset}_{self.name}_{metric}: {metric_mean:.6f}',)
+                print(f'{subset}_{self.name_metric}_{metric}: {metric_mean:.6f}',)
+            logging.info(f'{subset}_{self.name_metric}_{metric}: {metric_mean:.6f}',)
         if clear:
             self.clear_metrics(subset)
-        return metrics_now
+        # return metrics
+        return metrics
 
     #==== clear metrics ====
     def clear_metrics(self, subset: str):
@@ -115,4 +119,4 @@ class Metrics(torch.nn.Module):
 
     #==== output ====
     def __repr__(self):
-        return f'{self.__class__.__name__} name: {self.name}, metric_keys: {self.metric_keys}'
+        return f'{self.__class__.__name__} name: {self.name_metric}, keys_metric: {self.keys_metric}'
