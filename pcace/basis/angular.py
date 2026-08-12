@@ -5,6 +5,12 @@
 
 import torch
 
+__all__ = ["AngularBasis",]
+
+#****************************************************
+# AngularBasis
+#****************************************************
+
 """
     Cartesian Angular Basis
     @member l_max - the maximum angular momentum
@@ -59,6 +65,11 @@ class AngularBasis(torch.nn.Module):
             cSize*=3
         for l in range(1,self.l_max+1):
             self.offset[l]=self.offset[l-1]+self.l_size[l-1]
+        # pack limits into tensor
+        self.vec_lim = torch.zeros((self.l_max+1, 2), dtype=torch.long)
+        for l in range(self.l_max+1):
+            self.vec_lim[l,0] = self.offset[l]
+            self.vec_lim[l,1] = self.offset[l]+self.l_size[l]
     
     # ==== calculation ====
     """
@@ -79,18 +90,18 @@ class AngularBasis(torch.nn.Module):
 
     # ==== interval ====
     """ 
-        beg of stack section for total angular momentum l 
-        note: l can be thought of as either the total angular momentum
-        or the index of the arrays offset and l_size
-        this is because the minimum angular momentum is zero
+        Beg of stack section corresponding to total angular momentum l.
+        Note: l can be thought of as either the total angular momentum
+        or the index of the arrays offset and l_size.
+        This is because the minimum angular momentum is zero.
     """
     def beg(self, l: int):
         return self.offset[l]
     """ 
-        end of stack section for total angular momentum l 
-        note: l can be thought of as either the total angular momentum
-        or the index of the arrays offset and l_size
-        this is because the minimum angular momentum is zero
+        End of stack section corresponding to total angular momentum l.
+        Note: l can be thought of as either the total angular momentum
+        or the index of the arrays offset and l_size.
+        This is because the minimum angular momentum is zero.
     """
     def end(self, l: int):
         return self.offset[l]+self.l_size[l]
@@ -98,4 +109,3 @@ class AngularBasis(torch.nn.Module):
     # ==== representation ====
     def __repr__(self):
         return f"AngularBasis(l_max={self.l_max},size={self.size})"
-        
