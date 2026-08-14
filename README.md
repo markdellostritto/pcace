@@ -64,9 +64,18 @@ representation of the local density.
 
 ## INSTALLATION
 
-Installation can be achieved using the setup.py file:
+Installation in a given environment can be acheived one of two ways.
+If using an older version of setuptools one can directly install the code by accessing 
+setup.py from the command line:
+
 python setup.py build
+
 python setup.py install
+
+Modern versions of setuptools have deprecated setup.py as a command line tool.  Thus, 
+one should instead use pip with the following command in the same folder as setup.py:
+
+pip3 install .
 	
 ## TRAINING - DATA
 
