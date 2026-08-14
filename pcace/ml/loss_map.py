@@ -12,8 +12,9 @@ class NormT(Enum):
 """
 class LossMap(torch.nn.Module):
     """
-        target_name: Name of target in training batch.
-        name: name of the loss object
+        name_target: name of target in training data
+        name_oredict: name of target in the predicted data
+        name_loss: name of the loss object
         loss_fn: function to compute the loss
         loss_weight: loss weight in the composite loss: $l = w_1 l_1 + \dots + w_n l_n$
             This can be a float or a callable that takes in the loss_weight_args
@@ -21,23 +22,29 @@ class LossMap(torch.nn.Module):
             if training == True and a default value of 1.0 otherwise,
             loss_weight can be, e.g., lambda training, epoch: 1.0 if not training else epoch / 100
     """
+    # ==== initialization ====
     def __init__(
         self,
-        target_name: str,
-        predict_name: Optional[str] = None,
-        name: Optional[str] = None,
+        # names
+        name_target: str,
+        name_predict: Optional[str] = None,
+        name_loss: Optional[str] = None,
+        # loss function
         loss_fn: Optional[torch.nn.Module] = None,
-        loss_weight: Union[float, Callable] = 1.0, # Union[float, Callable] means that the type can be either float or callable
+        loss_weight: Union[float, Callable] = 1.0, 
         normT: NormT = NormT.NONE,
     ):
         super().__init__()
-        self.target_name = target_name
-        self.predict_name = predict_name or target_name
-        self.name = name or target_name
+        # set the names
+        self.name_target = name_target
+        self.name_predict = name_predict or name_target
+        self.name_loss = name_loss or name_target
+        # set the loss function
         self.loss_fn = loss_fn
         self.loss_weight = loss_weight
         self.normT = normT
 
+    # ==== calculation ====
     def forward(self, 
         pred: Dict[str, torch.Tensor], 
         target: Optional[Dict[str, torch.Tensor]] = None,
@@ -52,16 +59,16 @@ class LossMap(torch.nn.Module):
         else: 
             loss_weight = self.loss_weight
         # collect the predicted tensor
-        pred_tensor = pred[self.predict_name]
-        if pred_tensor.shape != target[self.target_name].shape:
-            pred_tensor = pred_tensor.reshape(target[self.target_name].shape)
+        pred_tensor = pred[self.name_predict]
+        if pred_tensor.shape != target[self.name_target].shape:
+            pred_tensor = pred_tensor.reshape(target[self.name_target].shape)
         # collect the target tensor
         if target is not None:
-            target_tensor = target[self.target_name]
-        elif self.predict_name != self.target_name:
-            target_tensor = pred[self.target_name]
+            target_tensor = target[self.name_target]
+        elif self.name_predict != self.name_target:
+            target_tensor = pred[self.name_target]
         else:
-            raise ValueError("Target is None and predict_name is not equal to target_name")
+            raise ValueError("Target is None and name_predict is not equal to name_target")
         # compute the weighted loss
         nAtoms = torch.bincount(target['batch'])
         if(nAtoms.shape == target_tensor.shape):
@@ -84,6 +91,6 @@ class LossMap(torch.nn.Module):
 
     def __repr__(self):
         return (
-            f"{self.__class__.__name__}(name={self.name}, loss_fn={self.loss_fn}, loss_weight={self.loss_weight})"
+            f"{self.__class__.__name__}(name_loss={self.name_loss}, loss_fn={self.loss_fn}, loss_weight={self.loss_weight})"
             )
 
