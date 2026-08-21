@@ -21,13 +21,13 @@ class MLIAP_PCACE(MLIAPUnified):
         # cutoff
         self.rcutfac = 0.5 * float(model.rep.cutoff.rc) # Half of radial cutoff
         self.dtype = model.rep.cutoff.rc.dtype
-        print(f"rcutfac = {self.rcutfac}")
-        print(f"dtype = {self.dtype}")
+        #print(f"rcutfac = {self.rcutfac}")
+        #print(f"dtype = {self.dtype}")
         # elements
         self.element_types = [chemical_symbols[z] for z in model.rep.z_list]
         self.num_species = len(self.element_types)
-        print(f"element types = {self.element_types}")
-        print(f"num species = {self.num_species}")
+        #print(f"element types = {self.element_types}")
+        #print(f"num species = {self.num_species}")
         # model
         self.model = model
         for p in self.model.parameters(): p.requires_grad = False
@@ -50,14 +50,14 @@ class MLIAP_PCACE(MLIAPUnified):
         nghost = ntotal - nlocal # number of ghost atoms
         npairs = data.npairs
 
-        print(f"N atoms total: {ntotal}")
-        print(f"N atoms local: {nlocal}")
-        print(f"N atoms ghost: {nghost}")
-        print(f"Atom indices: {data.iatoms}")
-        print(f"Atom types: {data.elems}")
-        print(f"Neighbor pairs: {npairs}")
-        print(f"Pair indices and displacement vectors: ")
-        print("\n".join([f"   ({i}, {j}), {r}" for i,j,r in zip(data.pair_i, data.pair_j, data.rij)]))
+        #print(f"N atoms total: {ntotal}")
+        #print(f"N atoms local: {nlocal}")
+        #print(f"N atoms ghost: {nghost}")
+        #print(f"Atom indices: {data.iatoms}")
+        #print(f"Atom types: {data.elems}")
+        #print(f"Neighbor pairs: {npairs}")
+        #print(f"Pair indices and displacement vectors: ")
+        #print("\n".join([f"   ({i}, {j}), {r}" for i,j,r in zip(data.pair_i, data.pair_j, data.rij)]))
 
         # initialize device
         if not self.initialized: self._initialize_device(data)
@@ -79,12 +79,12 @@ class MLIAP_PCACE(MLIAPUnified):
             "positions": torch.zeros((nlocal,3)).to(self.dtype).to(self.device),
             "cell": torch.zeros((3,3)).to(self.dtype).to(self.device),
         }
-        print("batch = ",batch["batch"])
-        print("vectors = ",batch["vectors"])
-        print("edge_index = ",batch["edge_index"])
-        print("atomic_numbers = ",batch["atomic_numbers"])
-        print("positions = ",batch["positions"])
-        print("cell = ",batch["cell"])
+        #print("batch = ",batch["batch"])
+        #print("vectors = ",batch["vectors"])
+        #print("edge_index = ",batch["edge_index"])
+        #print("atomic_numbers = ",batch["atomic_numbers"])
+        #print("positions = ",batch["positions"])
+        #print("cell = ",batch["cell"])
 
         # compute energies and pair forces
         out = self.model(
@@ -98,22 +98,22 @@ class MLIAP_PCACE(MLIAPUnified):
 
         # compute the energy and forces
         node_energy = out["energy_sr_node"]
-        print("node_energy = ",node_energy)
+        #print("node_energy = ",node_energy)
         pair_forces = out["forces_edge_nnp"]
-        print("pair_forces = ",pair_forces)
+        #print("pair_forces = ",pair_forces)
         if pair_forces is None: pair_forces = torch.zeros_like(data["vectors"])
         if self.dtype == torch.float32: pair_forces = pair_forces.double()
 
         # update LAMMPS data
         eatoms = torch.as_tensor(data.eatoms)
-        node_energy_real = node_energy[:nlocal].detach()
+        node_energy_real = node_energy[:nlocal].unsqueeze().detach()
         eatoms.copy_(node_energy_real)
         data.energy = node_energy_real.sum().item()
         data.update_pair_forces_gpu(pair_forces)
-
-        print(f"Energy: {node_energy_real.sum().item()}")
-        print(f"Pair indices and displacement vectors: ")
-        print("\n".join([f"   ({i}, {j}), {r}" for i,j,r in zip(data.pair_i, data.pair_j, data.rij)]))
+        
+        #print(f"Energy: {node_energy_real.sum().item()}")
+        #print(f"Pair indices and displacement vectors: ")
+        #print("\n".join([f"   ({i}, {j}), {r}" for i,j,r in zip(data.pair_i, data.pair_j, data.rij)]))
 
     def compute_descriptors(self, data):
         pass
