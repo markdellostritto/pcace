@@ -42,15 +42,14 @@ class ANN_GRho_Long(torch.nn.Module):
         skip: bool = False,
         linout: bool = True,
         weight: float = 1.0,
-        # constants
-        ke: float = 14.3996454784562,
-        # elements
-        radii: Dict[str,torch.tensor] = None,
-        # kspace
+        # potential parameters
         rc: float = 0.0,
         prec: float = 1.0e-6,
+        ke: float = 14.3996454784562,
+        # elements
+        radii: Dict[int,float] = None,
         # keys - input/output
-        key_input: Union[str, Sequence[int]] = 'node_feats',
+        key_input: str = 'node_feats',
         key_output_reduce: str = "q_tot",
         key_output_node: str = "q",
         # keys - energy/force
@@ -68,15 +67,20 @@ class ANN_GRho_Long(torch.nn.Module):
         self.n_out = n_out
         self.n_hidden = n_hidden
         self.activation = activation
-        self.weight = weight
+        self.register_buffer("weight", torch.tensor(weight, dtype=torch.get_default_dtype()))
 
-        # == set kspace ==
-        self.rc = rc
-        self.prec = prec
-        self.ke = ke
-
+        # == set potential parameters ==
+        self.register_buffer("rc", torch.tensor(rc, dtype=torch.get_default_dtype()))
+        self.register_buffer("prec", torch.tensor(prec, dtype=torch.get_default_dtype()))
+        self.register_buffer("ke", torch.tensor(ke, dtype=torch.get_default_dtype()))
+        
         # == set elements ==
         self.radii = radii
+        max_an = max(radii, key=radii.get)
+        self.register_buffer(
+            "radlist", torch.zeros(max_an+1,dtype=torch.get_default_dtype())
+        )
+        for key in radii: self.radlist[key]=radii[key]
 
         # == set keys - input/output ==
         self.key_input = key_input
@@ -130,13 +134,13 @@ class ANN_GRho_Long(torch.nn.Module):
 
         # == predict atomic properties ==
         out_node = self.outnet(features)
-        if self.skip: out_node += self.linear_nn(features)
-        out_node=torch.squeeze(out_node)
+        if self.linear_nn is not None: out_node += self.linear_nn(features)
+        out_node = torch.squeeze(out_node)
         # == reduce the atomic properties ==
-        out_reduce=scatter_sum(
-            src=out_node,
-            index=data["batch"],
-            dim=0
+        out_reduce = scatter_sum(
+            src = out_node,
+            index = data["batch"],
+            dim = 0
         )
         
         # == reduce atomic data ==
@@ -182,11 +186,7 @@ class ANN_GRho_Long(torch.nn.Module):
         #print("computing the energy - rspace term")
         # compute edge lengths 
         edge_lengths = torch.linalg.norm(data["vectors"], dim=-1, keepdim=False)  # [n_edges]
-        # compute the gaussian radius
-        radius=torch.tensor(
-            [self.radii[a.item()] for a in data["atomic_numbers"]],
-            device=data["atomic_numbers"].device
-        )
+        radius = self.radlist[data["atomic_numbers"]]
         gamma=2.0*radius[data["edge_index"][0]]*radius[data["edge_index"][1]]\
             /(radius[data["edge_index"][0]]+radius[data["edge_index"][1]])
         # compute the edge energy
@@ -196,6 +196,7 @@ class ANN_GRho_Long(torch.nn.Module):
             *(torch.erf(torch.sqrt(0.5*gamma)*edge_lengths)\
               -torch.erf(kAlpha[data["batch"][data["edge_index"][0]]]*edge_lengths))\
             *1.0/edge_lengths
+            #*(edge_lengths<self.rc).float()
         # compute the node energy
         n_nodes = data["atomic_numbers"].shape[0]
         energy_node = 0.5*scatter_sum(

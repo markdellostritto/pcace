@@ -40,10 +40,12 @@ class ANN_LDamp_Cut(torch.nn.Module):
         skip: bool = False,
         linout: bool = True,
         weight: float = 1.0,
+        # potential parameters
+        rc: float = 0.0,
         # elements
-        radii: Dict[str,torch.tensor] = None,
+        radii: Dict[int,float] = None,
         # keys - input/output
-        key_input: Union[str, Sequence[int]] = 'node_feats',
+        key_input: str = 'node_feats',
         key_output_reduce: str = "c_tot",
         key_output_node: str = "c",
         # keys - energy/force
@@ -61,10 +63,18 @@ class ANN_LDamp_Cut(torch.nn.Module):
         self.n_out = n_out
         self.n_hidden = n_hidden
         self.activation = activation
-        self.weight = weight
+        self.register_buffer("weight", torch.tensor(weight, dtype=torch.get_default_dtype()))
 
+        # == set potential parameters ==
+        self.register_buffer("rc", torch.tensor(rc, dtype=torch.get_default_dtype()))
+        
         # == set elements ==
         self.radii = radii
+        max_an = max(radii, key=radii.get)
+        self.register_buffer(
+            "radlist", torch.zeros(max_an+1,dtype=torch.get_default_dtype())
+        )
+        for key in radii: self.radlist[key]=radii[key]
         
         # == set keys - input/output ==
         self.key_input = key_input
@@ -118,13 +128,13 @@ class ANN_LDamp_Cut(torch.nn.Module):
 
         # == predict atomic properties ==
         out_node = self.outnet(features) 
-        if self.skip: out_node += self.linear_nn(features)
+        if self.linear_nn is not None: out_node += self.linear_nn(features)
         out_node = torch.squeeze(out_node)
         # == reduce the atomic properties ==
-        out_reduce=scatter_sum(
-            src=out_node,
-            index=data["batch"],
-            dim=0
+        out_reduce = scatter_sum(
+            src = out_node,
+            index = data["batch"],
+            dim = 0
         )
         
         # == reduce atomic data ==
@@ -134,18 +144,16 @@ class ANN_LDamp_Cut(torch.nn.Module):
         # == compute the energy - rspace ==
         #print("computing the energy - rspace term")
         # compute the vdw radius
-        data["radius_vdw"]=torch.tensor(
-            [self.radii[a.item()] for a in data["atomic_numbers"]],
-            device=data["atomic_numbers"].device
-        )
-        rvdw=0.5*(data["radius_vdw"][data["edge_index"][0]]+data["radius_vdw"][data["edge_index"][1]])
+        rvdw_node = self.radlist[data["atomic_numbers"]]
+        rvdw_edge = 0.5*(rvdw_node[data["edge_index"][0]]+rvdw_node[data["edge_index"][1]])
         # compute edge lengths 
         edge_lengths = torch.linalg.norm(data["vectors"], dim=-1, keepdim=False)  # [n_edges]
         # compute the edge energy
         energy_edge = -1.0\
             *data[self.key_output_node][data["edge_index"][0]]\
             *data[self.key_output_node][data["edge_index"][1]]\
-            *1.0/(edge_lengths**6+rvdw**6)
+            *1.0/(edge_lengths**6+rvdw_edge**6)
+            #*(edge_lengths<self.rc).float()
         n_nodes = data["atomic_numbers"].shape[0]
         energy_node = 0.5*scatter_sum(
             src=energy_edge, 

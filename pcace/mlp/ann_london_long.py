@@ -42,11 +42,11 @@ class ANN_London_Long(torch.nn.Module):
         skip: bool = False,
         linout: bool = True,
         weight: float = 1.0,
-        # kspace
+        # potential parameters
         rc: float = 0.0,
         prec: float = 1.0e-6,
         # keys - input/output
-        key_input: Union[str, Sequence[int]] = 'node_feats',
+        key_input: str = 'node_feats',
         key_output_reduce: str = "c_tot",
         key_output_node: str = "c",
         # keys - energy/force
@@ -64,11 +64,11 @@ class ANN_London_Long(torch.nn.Module):
         self.n_out = n_out
         self.n_hidden = n_hidden
         self.activation = activation
-        self.weight = weight
+        self.register_buffer("weight", torch.tensor(weight, dtype=torch.get_default_dtype()))
 
-        # == set kspace ==
-        self.rc = rc
-        self.prec = prec
+        # == set potential parameters ==
+        self.register_buffer("rc", torch.tensor(rc, dtype=torch.get_default_dtype()))
+        self.register_buffer("prec", torch.tensor(prec, dtype=torch.get_default_dtype()))
         
         # == set keys - input/output ==
         self.key_input = key_input
@@ -122,13 +122,13 @@ class ANN_London_Long(torch.nn.Module):
 
         # == predict atomic properties ==
         out_node = self.outnet(features)
-        if self.skip: out_node += self.linear_nn(features)
-        out_node=torch.squeeze(out_node)
+        if self.linear_nn is not None: out_node += self.linear_nn(features)
+        out_node = torch.squeeze(out_node)
         # == reduce the atomic properties ==
-        out_reduce=scatter_sum(
-            src=out_node,
-            index=data["batch"],
-            dim=0
+        out_reduce = scatter_sum(
+            src = out_node,
+            index = data["batch"],
+            dim = 0
         )
         
         # == reduce atomic data ==
@@ -171,6 +171,7 @@ class ANN_London_Long(torch.nn.Module):
             *data[self.key_output_node][data["edge_index"][1]]\
             *torch.exp(-1.0*scaled_lengths2)\
             *(1.0+scaled_lengths2*(1.0+0.5*scaled_lengths2))/edge_lengths**6
+            #*(edge_lengths<self.rc).float()
         # compute the node energy
         n_nodes = data["atomic_numbers"].shape[0]
         energy_node = 0.5*scatter_sum(

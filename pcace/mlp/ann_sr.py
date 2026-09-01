@@ -41,7 +41,7 @@ class ANN_SR(torch.nn.Module):
         linout: bool = True,
         weight: float = 1.0,
         # keys - input/output
-        key_input: Union[str, Sequence[int]] = 'node_feats',
+        key_input: str = 'node_feats',
         key_output_reduce: str = "energy_sr",
         key_output_node: str = "energy_sr_node",
         # keys - energy/force
@@ -59,7 +59,7 @@ class ANN_SR(torch.nn.Module):
         self.n_out = n_out
         self.n_hidden = n_hidden
         self.activation = activation
-        self.weight = weight
+        self.register_buffer("weight", torch.tensor(weight, dtype=torch.get_default_dtype()))
 
         # == set keys - input/output ==
         self.key_input = key_input
@@ -114,13 +114,13 @@ class ANN_SR(torch.nn.Module):
 
         # == predict atomic properties ==
         out_node = self.outnet(features)
-        if self.skip: out_node += self.linear_nn(features)
+        if self.linear_nn is not None: out_node += self.linear_nn(features)
 
         # == reduce the atomic properties ==
-        out_reduce=scatter_sum(
-            src=out_node,
-            index=data["batch"],
-            dim=0
+        out_reduce = scatter_sum(
+            src = out_node,
+            index = data["batch"],
+            dim = 0
         )
         out_reduce=torch.squeeze(out_reduce,-1)
 
