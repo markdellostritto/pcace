@@ -27,27 +27,37 @@ class TrainingTask(nn.Module):
         warmup_steps: number of warmup steps before reaching the base learning rate
     """
     def __init__(self, 
+        # model
         model: nn.Module,
+        # losses
         losses: List[LossMap],
+        # metrics
         metrics: List[Metrics],
+        # device
         device: torch.device = torch.device('cpu'),
+        # optimizer
         optimizer_cls: Type[torch.optim.Optimizer] = torch.optim.Adam,
         optimizer_args: Optional[Dict[str, Any]] = None,
+        # scheduler
         scheduler_cls: Optional[Type] = None,
         scheduler_args: Optional[Dict[str, Any]] = None,
+        # ema
         ema: bool = False, 
         ema_decay: float = 0.99,
         ema_start: int = 0,
+        # misc
         max_grad_norm: float = 10,
         warmup_steps: int = 0,                
     ):
         super().__init__()
+        # data
         self.device = device
         self.model = model.to(self.device)
-        self.losses = nn.ModuleList(losses)
-        self.metrics = nn.ModuleList(metrics)
+        self.losses = nn.ModuleList(losses).to(self.device)
+        self.metrics = nn.ModuleList(metrics).to(self.device)
         self.optimizer = optimizer_cls(self.parameters(), **optimizer_args)
         self.scheduler = scheduler_cls(self.optimizer, **scheduler_args) if scheduler_cls else None
+        # ema
         self.ema = ema
         self.ema_start = ema_start
         if self.ema:
@@ -62,13 +72,12 @@ class TrainingTask(nn.Module):
                 self.ema_model = torch.optim.swa_utils.AveragedModel(model, avg_fn=ema_avg)
         else:
             self.ema_model = None
-
+        # misc
         self.max_grad_norm = max_grad_norm
         self.warmup_steps = warmup_steps
+        # startup
         self.lr = optimizer_args['lr']
         self.global_step = 0
-
-        #self.grad_enabled = len(self.model.required_derivatives) > 0
         self.grad_enabled = True
 
     def update_loss(self, losses: List[LossMap]):
@@ -147,11 +156,11 @@ class TrainingTask(nn.Module):
         # return the loss
         return loss.cpu().detach().numpy().item()
 
-    def validate(self, val_loader):
+    def validate(self, loader_val):
         torch.set_grad_enabled(self.grad_enabled)
         self.eval()
         total_loss = 0.0
-        for batch in val_loader:
+        for batch in loader_val:
             batch.to(self.device)
             batch_dict = batch.to_dict()
             if self.ema and self.global_step >= self.ema_start:
@@ -164,11 +173,12 @@ class TrainingTask(nn.Module):
             total_loss += loss.item()
             self.log_metrics('val', pred, batch_dict)
         # return the loss
-        return total_loss / len(val_loader)
+        return total_loss / len(loader_val)
 
     def fit(self, 
-        train_loader, 
-        val_loader, 
+        # data loaders
+        loader_train, 
+        loader_val, 
         epochs, 
         val_stride: int = 1, 
         screen_nan: bool = True,
@@ -184,8 +194,8 @@ class TrainingTask(nn.Module):
             # train
             total_loss = 0
             if subset_ratio < 1.0:
-                train_loader = self._get_subset_batches(train_loader, subset_ratio)
-            for batch in train_loader:
+                loader_train = self._get_subset_batches(loader_train, subset_ratio)
+            for batch in loader_train:
                 if subsample_loss_mode is not None:
                     loss_index = np.random.choice(len(self.losses), subsample_loss_mode)
                     loss = self.train_step(batch, screen_nan=screen_nan, loss_index=loss_index)
@@ -196,14 +206,14 @@ class TrainingTask(nn.Module):
                 if self.scheduler:
                     if self.scheduler.__class__.__name__ == "OneCycleLR":
                         self.scheduler.step()
-            avg_loss = total_loss / len(train_loader)
+            avg_loss = total_loss / len(loader_train)
             # validate
             if print_stride > 0 and self.global_step % print_stride == 0:
                 screen_output = True
             else:
                 screen_output = False
             if epoch % val_stride == 0:
-                val_loss = self.validate(val_loader)
+                val_loss = self.validate(loader_val)
                 for pg in self.optimizer.param_groups:
                     lr_now = pg["lr"]
                     if screen_output:
@@ -214,6 +224,17 @@ class TrainingTask(nn.Module):
                 logging.info(f'Epoch {epoch}, Train Loss: {avg_loss:.4f}, Val Loss: {val_loss:.4f}')
                 self.retrieve_metrics('train', print_log=screen_output)
                 self.retrieve_metrics('val', print_log=screen_output)
+                mem_a_now = torch.cuda.memory.memory_allocated(device = self.device)/10**9
+                mem_a_max = torch.cuda.memory.max_memory_allocated(device = self.device)/10**9
+                mem_a_per = 0 if mem_a_max == 0 else mem_a_now/mem_a_max*100.0
+                mem_r_now = torch.cuda.memory.memory_reserved(device = self.device)/10**9
+                mem_r_max = torch.cuda.memory.max_memory_reserved(device = self.device)/10**9
+                mem_r_per = 0 if mem_r_now == 0 else mem_r_now/mem_r_max*100.0
+                if screen_output:
+                    print(f'Mem - a (GB): {mem_a_now:.4f} {mem_a_max:.4f} {mem_a_per:.4f}%')
+                    print(f'Mem - r (GB): {mem_r_now:.4f} {mem_r_max:.4f} {mem_r_per:.4f}%')
+                logging.info(f'Mem - a (GB): {mem_a_now:.4f} {mem_a_max:.4f} {mem_a_per:.4f}%')
+                logging.info(f'Mem - r (GB): {mem_r_now:.4f} {mem_r_max:.4f} {mem_r_per:.4f}%')
             # set learning rate
             if self.scheduler:
                 if self.scheduler.__class__.__name__ == 'ReduceLROnPlateau':
