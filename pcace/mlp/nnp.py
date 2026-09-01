@@ -61,9 +61,15 @@ class NNP(torch.nn.Module):
 
         # == get the number of graphs ==
         try:
-            data["num_graphs"]=data["ptr"].numel()-1
+            data["num_graphs"] = data["ptr"].numel()-1
         except:
-            data["num_graphs"]=1
+            data["num_graphs"] = 1
+        #print("num_graphs = ",data["num_graphs"])
+        
+        # == set the batch ==
+        if data["batch"] == None: 
+            n_nodes = data["atomic_numbers"].shape[0]
+            data["batch"] = torch.zeros(n_nodes,dtype=torch.int64,device=data["atomic_numbers"].device)
         
         # == get symmetric displacement ==
         #print("get_symmetric_displacement")
@@ -73,7 +79,7 @@ class NNP(torch.nn.Module):
                 data["shifts"],
                 data["displacement"],
                 data["cell"]
-            )=get_symmetric_displacement(
+            ) = get_symmetric_displacement(
                 data["positions"],
                 data["unit_shifts"],
                 data["cell"],
@@ -96,18 +102,19 @@ class NNP(torch.nn.Module):
         virials = []
         forces_edge = []
         for ann in self.annl:
-            data = ann(data,
-                training,
-                compute_forces,
-                compute_stress,
-                compute_virials,
-                compute_forces_edge,
-            )
-            energies.append(data[ann.key_energy])
-            if compute_forces: forces.append(data[ann.key_forces])
-            if compute_stress: stress.append(data[ann.key_stress])
-            if compute_virials: virials.append(data[ann.key_virials])
-            if compute_forces_edge: forces_edge.append(data[ann.key_forces_edge])
+            if ann.weight>0.0:
+                data = ann(data,
+                    training,
+                    compute_forces,
+                    compute_stress,
+                    compute_virials,
+                    compute_forces_edge,
+                )
+                energies.append(data[ann.key_energy])
+                if compute_forces: forces.append(data[ann.key_forces])
+                if compute_stress: stress.append(data[ann.key_stress])
+                if compute_virials: virials.append(data[ann.key_virials])
+                if compute_forces_edge: forces_edge.append(data[ann.key_forces_edge])
         data[self.key_energy]=torch.stack(energies).sum(0)
         if compute_forces: data[self.key_forces]=torch.stack(forces).sum(0)
         if compute_stress: data[self.key_stress]=torch.stack(stress).sum(0)
