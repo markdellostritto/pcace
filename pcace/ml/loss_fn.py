@@ -8,11 +8,19 @@ import torch
 # Loss Functions
 #****************************************************
 
+class LossMAE(torch.nn.Module):
+    #==== initialization ====
+    def __init__(self):
+        super().__init__()
+    #==== calculation ====
+    def forward(self, output, target):
+        loss = torch.mean(torch.abs(output - target))
+        return loss
+    
 class LossMSE(torch.nn.Module):
     #==== initialization ====
-    def __init__(self, a: float=1.0):
+    def __init__(self):
         super().__init__()
-        self.register_buffer("a", torch.tensor(a, dtype=torch.get_default_dtype()))
     #==== calculation ====
     def forward(self, output, target):
         loss = 0.5*torch.mean((output - target)**2)
