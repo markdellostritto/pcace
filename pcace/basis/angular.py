@@ -5,7 +5,7 @@
 
 import torch
 
-__all__ = ["AngularBasis",]
+__all__ = ["AngularBasis"]
 
 #****************************************************
 # AngularBasis
@@ -49,13 +49,13 @@ __all__ = ["AngularBasis",]
 class AngularBasis(torch.nn.Module):
     # ==== initialization ====
     """
-		l_max - max angular momentum
-	"""
+        l_max - max angular momentum
+    """
     def __init__(self, l_max: int):
         super().__init__()
-        self.l_max = l_max
-        self.l_size = [0]*(l_max+1)
-        self.offset = [0]*(l_max+1)
+        self.register_buffer("l_max", torch.tensor(l_max, dtype=torch.int))
+        self.register_buffer("l_size", torch.zeros(l_max+1, dtype=torch.int))
+        self.register_buffer("offset", torch.zeros(l_max+1, dtype=torch.int))
         # compute size
         cSize = 1
         self.size = 0
@@ -66,10 +66,10 @@ class AngularBasis(torch.nn.Module):
         for l in range(1,self.l_max+1):
             self.offset[l]=self.offset[l-1]+self.l_size[l-1]
         # pack limits into tensor
-        self.vec_lim = torch.zeros((self.l_max+1, 2), dtype=torch.long)
+        self.register_buffer("lvec_lim",torch.zeros((self.l_max+1, 2), dtype=torch.int))
         for l in range(self.l_max+1):
-            self.vec_lim[l,0] = self.offset[l]
-            self.vec_lim[l,1] = self.offset[l]+self.l_size[l]
+            self.lvec_lim[l,0] = self.offset[l]
+            self.lvec_lim[l,1] = self.offset[l]+self.l_size[l]
     
     # ==== calculation ====
     """

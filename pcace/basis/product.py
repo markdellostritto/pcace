@@ -2,6 +2,7 @@
 # Import Statements
 #*************************************************************************************************
 
+import torch
 import numpy as np
 
 __all__ = ["AngularProduct"]
@@ -90,30 +91,33 @@ def lvec(order: int, l_max: int):
 		within the list.  The beginning and end of the sections of list associated with
 		a given body order can be accessed using the beg and end functions.  Note that
 		these take the body order itself, which has a minimum of one, and thus the input
-		to these beg and end functions should not be thought of as a python list index.
+		to these beg and end functions should not be thought of as a python list index.	
 """
-class AngularProduct:
+class AngularProduct(torch.nn.Module):
 	# ==== initialization ====
 	"""
 		o_max - max body order
 		l_max - max angular momentum
 	"""
 	def __init__(self, o_max: int, l_max: int):
+		super().__init__()
 		# set order and lmax
-		self.o_max=o_max
-		self.l_max=l_max
+		self.register_buffer("o_max", torch.tensor(o_max, dtype=torch.int))
+		self.register_buffer("l_max", torch.tensor(l_max, dtype=torch.int))
 		# compute lprod and size
-		self.lprod=[]
-		self.size=0	
-		self.p_size = [0]*(o_max)
+		lprod=[]
+		size=0
+		self.register_buffer("p_size", torch.zeros(o_max, dtype=torch.int))
 		for i in range(0,o_max):
 			order = i+1
 			vec=lvec(order,self.l_max)
-			self.size+=len(vec)
+			size+=len(vec)
 			self.p_size[i]=len(vec)
-			for lv in vec: self.lprod.append(lv)
+			for lv in vec: lprod.append(lv)
+		self.register_buffer("size", torch.tensor(size, dtype=torch.int))
+		self.register_buffer("lprod", torch.tensor(lprod, dtype=torch.int))
 		# compute offset
-		self.offset = [0]*(o_max)
+		self.register_buffer("offset", torch.zeros(o_max, dtype=torch.int))
 		for i in range(1,o_max):
 			self.offset[i]=self.offset[i-1]+self.p_size[i-1]
 	
@@ -136,6 +140,6 @@ class AngularProduct:
 	# ==== representation ====
 	def __repr__(self):
 		return (
-			f"{self.__class__.__name__}(order={self.o_max}, l_max={self.l_max}, size={self.size})"
+			f"{self.__class__.__name__}(o_max={self.o_max}, l_max={self.l_max}, size={self.size})"
 		)
 
