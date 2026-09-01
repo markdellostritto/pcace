@@ -105,17 +105,15 @@ class AngularProduct(torch.nn.Module):
 		self.register_buffer("o_max", torch.tensor(o_max, dtype=torch.int))
 		self.register_buffer("l_max", torch.tensor(l_max, dtype=torch.int))
 		# compute lprod and size
-		lprod=[]
-		size=0
+		self.lprod=[]
+		self.register_buffer("size", torch.tensor(0.0, dtype=torch.int))
 		self.register_buffer("p_size", torch.zeros(o_max, dtype=torch.int))
 		for i in range(0,o_max):
 			order = i+1
 			vec=lvec(order,self.l_max)
-			size+=len(vec)
+			self.size+=len(vec)
 			self.p_size[i]=len(vec)
-			for lv in vec: lprod.append(lv)
-		self.register_buffer("size", torch.tensor(size, dtype=torch.int))
-		self.register_buffer("lprod", torch.tensor(lprod, dtype=torch.int))
+			for lv in vec: self.lprod.append(lv)
 		# compute offset
 		self.register_buffer("offset", torch.zeros(o_max, dtype=torch.int))
 		for i in range(1,o_max):
