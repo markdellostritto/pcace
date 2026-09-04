@@ -44,6 +44,7 @@ class ANN_LDamp_Long(torch.nn.Module):
         weight: float = 1.0,
         # potential parameters
         rc: float = 0.0,
+        kc: float = 1.0,
         prec: float = 1.0e-6,
         # elements
         radii: Dict[int,float] = None,
@@ -70,11 +71,12 @@ class ANN_LDamp_Long(torch.nn.Module):
 
         # == set potential parameters ==
         self.register_buffer("rc", torch.tensor(rc, dtype=torch.get_default_dtype()))
+        self.register_buffer("kc", torch.tensor(kc, dtype=torch.get_default_dtype()))
         self.register_buffer("prec", torch.tensor(prec, dtype=torch.get_default_dtype()))
         
         # == set elements ==
         self.radii = radii
-        max_an = max(radii, key=radii.get)
+        max_an = max(radii.keys())
         self.register_buffer(
             "radlist", torch.zeros(max_an+1,dtype=torch.get_default_dtype())
         )
@@ -152,18 +154,26 @@ class ANN_LDamp_Long(torch.nn.Module):
         c2s = scatter_sum(src=out_node*out_node,index=data["batch"],dim=0)
         # compute reciprocal lattice
         cellR = data['cell'].view(-1, 3, 3)
-        cellK = torch.transpose(2.0*np.pi*torch.linalg.inv(cellR),1,2)
+        cellK = 2.0*np.pi*torch.linalg.inv(cellR)
         vol = torch.linalg.det(cellR)
+        knorms = torch.linalg.vector_norm(cellK,dim=-1)
         # compute convergence constant
-        kAlphaG = (1.35-0.15*torch.log(self.prec))/self.rc
-        kAlpha = torch.tensor([kAlphaG for _ in range(nGraphs)],device=data["batch"].device)
+        kAlphaG = -1.0*torch.log(self.prec)/self.rc
+        kAlpha = torch.tensor([kAlphaG]*nGraphs,device=data["batch"].device)
+        numK = torch.ceil(torch.reciprocal(knorms)*kAlpha[:,None]*self.kc).to(dtype=int)
         #print("kAlpha = ",kAlpha)
         # compute reciprocal lattice points
-        nk = [8,8,8] # approximation
-        kpoints = []
-        for ix,iy,iz in itertools.product(range(-nk[0],nk[0]+1), range(-nk[1],nk[1]+1), range(-nk[2],nk[2]+1)):
-            if(np.max(np.abs(np.array([ix,iy,iz])))): kpoints.append([ix,iy,iz])
-        kpoints = torch.tensor(kpoints,device=data["batch"].device)
+        #nk = [8,8,8] # approximation
+        #kpoints = []
+        #for ix,iy,iz in itertools.product(range(-nk[0],nk[0]+1), range(-nk[1],nk[1]+1), range(-nk[2],nk[2]+1)):
+        #    if(np.max(np.abs(np.array([ix,iy,iz])))): kpoints.append([ix,iy,iz])
+        #kpoints = torch.tensor(kpoints,device=data["batch"].device)
+        kpts=[[]]*nGraphs
+        for i in range(0,nGraphs):
+            nkpt=numK[i]
+            for ix,iy,iz in itertools.product(range(-nkpt[0],nkpt[0]+1), range(-nkpt[1],nkpt[1]+1), range(-nkpt[2],nkpt[2]+1)):
+                if(np.max(np.abs(np.array([ix,iy,iz])))): kpts[i].append([ix,iy,iz])
+        kpts = torch.tensor(kpts,device=data["batch"].device)
         
         # == compute the energy - constant term ==
         #print("computing the energy - constant term")
@@ -213,10 +223,15 @@ class ANN_LDamp_Long(torch.nn.Module):
             unique_batches = torch.unique(data["batch"])
             for i in unique_batches:
                 mask = data["batch"] == i  # Create a mask for the i-th configuration
+                #kvecs=(\
+                #    cellK[i,0,:].unsqueeze(-1)*kpoints[:,0]+\
+                #    cellK[i,1,:].unsqueeze(-1)*kpoints[:,1]+\
+                #    cellK[i,2,:].unsqueeze(-1)*kpoints[:,2]\
+                #) # [3,nkvec]
                 kvecs=(\
-                    cellK[i,0,:].unsqueeze(-1)*kpoints[:,0]+\
-                    cellK[i,1,:].unsqueeze(-1)*kpoints[:,1]+\
-                    cellK[i,2,:].unsqueeze(-1)*kpoints[:,2]\
+                    cellK[i,0,:].unsqueeze(-1)*kpts[i][:,0]+\
+                    cellK[i,1,:].unsqueeze(-1)*kpts[i][:,1]+\
+                    cellK[i,2,:].unsqueeze(-1)*kpts[i][:,2]\
                 ) # [3,nkvec]
                 knorms=torch.linalg.norm(kvecs,dim=0) # [nkvec]
                 b=0.5*knorms/kAlpha[i]
@@ -283,6 +298,7 @@ class ANN_LDamp_Long(torch.nn.Module):
             f"key_forces_edge = {self.key_forces_edge}\n"
             # kspace
             f"rc = {self.rc}\n"
+            f"kc = {self.kc}\n"
             f"prec = {self.prec}\n"
             # elements
             f"radii = {self.radii}\n"
