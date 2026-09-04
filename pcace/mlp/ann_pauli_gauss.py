@@ -72,7 +72,7 @@ class ANN_Pauli_Gauss(torch.nn.Module):
         
         # == set radii ==
         self.radii = radii
-        max_an = max(radii, key=radii.get)
+        max_an = max(radii.keys())
         self.register_buffer(
             "radlist", torch.zeros(max_an+1,dtype=torch.get_default_dtype())
         )
@@ -162,9 +162,9 @@ class ANN_Pauli_Gauss(torch.nn.Module):
             *data[self.key_output_node][data["edge_index"][0]]\
             *data[self.key_output_node][data["edge_index"][1]]\
             *amp/edge_lengths\
-            *torch.exp(-0.5*gamma*edge_lengths*edge_lengths)
+            *torch.exp(-gamma*edge_lengths*edge_lengths)
             #*(edge_lengths<self.rc).float()
-        # compute the node energy
+        # compute the node energy - sum over edges
         n_nodes = data["atomic_numbers"].shape[0]
         energy_node = 0.5*scatter_sum(
             src=energy_edge, 
@@ -172,7 +172,7 @@ class ANN_Pauli_Gauss(torch.nn.Module):
             dim=0, 
             dim_size=n_nodes
         )*self.weight
-        # compute the structure energy
+        # compute the total energy - sum over nodes
         data[self.key_energy]=scatter_sum(
             src=energy_node,
             index=data["batch"],
