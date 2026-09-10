@@ -111,7 +111,7 @@ class ANN_SR(torch.nn.Module):
         # reshape such that each node feature is a 1D tensor
         features = features.reshape(features.shape[0], -1) 
         # features: [n_nodes, dim_radial_embed * ang_prod.size * dim_edge_encode]
-
+        
         # == predict atomic properties ==
         out_node = self.outnet(features)
         if self.linear_nn is not None: out_node += self.linear_nn(features)
@@ -165,7 +165,7 @@ class ANN_SR(torch.nn.Module):
     # ==== output ====
     def __repr__(self):
         return (
-            f"\n==============================================\n"
+            f"\n=========================================================\n"
             f"{self.__class__.__name__}\n"
             # keys - input/output
             f"key_input = {self.key_input}\n"
@@ -186,7 +186,8 @@ class ANN_SR(torch.nn.Module):
             f"linout = {self.linout}\n"
             f"weight = {self.weight}\n"
             # neural nets
-            f"{self.outnet}\n"
-            f"{self.linear_nn}\n"
-            f"**********************************************"
+            f"mlp = {self.outnet}\n"
+            f"lnn = {self.linear_nn}\n"
+            f"---------------------------------------------------------\n"
+            f"========================================================="
         )

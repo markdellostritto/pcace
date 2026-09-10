@@ -213,10 +213,8 @@ class ANN_Pauli_Gauss(torch.nn.Module):
     # ==== output ====
     def __repr__(self):
         return (
-            f"\n==============================================\n"
+            f"\n=========================================================\n"
             f"{self.__class__.__name__}\n"
-            # constants
-            f"ke = {self.ke}\n"
             # keys - input/output
             f"key_input = {self.key_input}\n"
             f"key_output_reduce = {self.key_output_reduce}\n"
@@ -227,6 +225,9 @@ class ANN_Pauli_Gauss(torch.nn.Module):
             f"key_virials = {self.key_virials}\n"
             f"key_stress = {self.key_stress}\n"
             f"key_forces_edge = {self.key_forces_edge}\n"
+            # parameters
+            f"rc = {self.rc}\n"
+            f"ke = {self.ke}\n"
             # radii
             f"radii = {self.radii}\n"
             # neural network
@@ -238,7 +239,8 @@ class ANN_Pauli_Gauss(torch.nn.Module):
             f"linout = {self.linout}\n"
             f"weight = {self.weight}\n"
             # neural nets
-            f"{self.outnet}\n"
-            f"{self.linear_nn}\n"
-            f"**********************************************"
+            f"mlp = {self.outnet}\n"
+            f"lnn = {self.linear_nn}\n"
+            f"---------------------------------------------------------\n"
+            f"========================================================="
         )

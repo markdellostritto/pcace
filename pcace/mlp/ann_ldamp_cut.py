@@ -42,6 +42,7 @@ class ANN_LDamp_Cut(torch.nn.Module):
         weight: float = 1.0,
         # potential parameters
         rc: float = 0.0,
+        alpha: float = 6.0,
         # elements
         radii: Dict[int,float] = None,
         # keys - input/output
@@ -67,10 +68,12 @@ class ANN_LDamp_Cut(torch.nn.Module):
 
         # == set potential parameters ==
         self.register_buffer("rc", torch.tensor(rc, dtype=torch.get_default_dtype()))
+        self.register_buffer("alpha", torch.tensor(alpha, dtype=torch.get_default_dtype()))
+        self.register_buffer("beta", torch.tensor(6.0/alpha, dtype=torch.get_default_dtype()))
         
         # == set elements ==
         self.radii = radii
-        max_an = max(radii, key=radii.get)
+        max_an = max(radii.keys())
         self.register_buffer(
             "radlist", torch.zeros(max_an+1,dtype=torch.get_default_dtype())
         )
@@ -152,7 +155,7 @@ class ANN_LDamp_Cut(torch.nn.Module):
         energy_edge = -1.0\
             *data[self.key_output_node][data["edge_index"][0]]\
             *data[self.key_output_node][data["edge_index"][1]]\
-            *1.0/(edge_lengths**6+rvdw_edge**6)
+            *1.0/(edge_lengths**self.alpha+rvdw_edge**self.alpha)**self.beta
             #*(edge_lengths<self.rc).float()
         n_nodes = data["atomic_numbers"].shape[0]
         energy_node = 0.5*scatter_sum(
@@ -202,7 +205,7 @@ class ANN_LDamp_Cut(torch.nn.Module):
     # ==== output ====
     def __repr__(self):
         return (
-            f"\n==============================================\n"
+            f"\n=========================================================\n"
             f"{self.__class__.__name__}\n"
             # keys - input/output
             f"key_input = {self.key_input}\n"
@@ -214,6 +217,10 @@ class ANN_LDamp_Cut(torch.nn.Module):
             f"key_virials = {self.key_virials}\n"
             f"key_stress = {self.key_stress}\n"
             f"key_forces_edge = {self.key_forces_edge}\n"
+            # parameters
+            f"rc = {self.rc}\n"
+            f"alpha = {self.alpha}\n"
+            f"beta = {self.beta}\n"
             # elements
             f"radii = {self.radii}\n"
             # neural network
@@ -225,7 +232,8 @@ class ANN_LDamp_Cut(torch.nn.Module):
             f"linout = {self.linout}\n"
             f"weight = {self.weight}\n"
             # neural nets
-            f"{self.outnet}\n"
-            f"{self.linear_nn}\n"
-            f"**********************************************"
+            f"mlp = {self.outnet}\n"
+            f"lnn = {self.linear_nn}\n"
+            f"---------------------------------------------------------\n"
+            f"========================================================="
         )

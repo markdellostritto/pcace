@@ -146,24 +146,27 @@ class ANN_London_Long(torch.nn.Module):
         cellR = data['cell'].view(-1, 3, 3)
         cellK = 2.0*np.pi*torch.linalg.inv(cellR)
         vol = torch.linalg.det(cellR)
-        knorms = torch.linalg.vector_norm(cellK,dim=-1)
+        cellKN = torch.linalg.vector_norm(cellK,dim=-1)
         # compute convergence constant
-        kAlphaG = -1.0*torch.log(self.prec)/self.rc
+        kAlphaG = torch.sqrt(-1.0*torch.log(self.prec))/self.rc
         kAlpha = torch.tensor([kAlphaG]*nGraphs,device=data["batch"].device)
-        numK = torch.ceil(torch.reciprocal(knorms)*kAlpha[:,None]*self.kc).to(dtype=int)
+        numK = torch.ceil(
+            torch.reciprocal(cellKN)
+            *kAlpha[:,None]
+            *torch.sqrt(-1.0*torch.log(self.prec))
+            *self.kc
+        ).to(dtype=int)
         #print("kAlpha = ",kAlpha)
+        #print("numK = ",numK)
         # compute reciprocal lattice points
-        #nk = [8,8,8] # approximation
-        #kpoints = []
-        #for ix,iy,iz in itertools.product(range(-nk[0],nk[0]+1), range(-nk[1],nk[1]+1), range(-nk[2],nk[2]+1)):
-        #    if(np.max(np.abs(np.array([ix,iy,iz])))): kpoints.append([ix,iy,iz])
-        #kpoints = torch.tensor(kpoints,device=data["batch"].device)
-        kpts=[[]]*nGraphs
+        kpts=[]
         for i in range(0,nGraphs):
-            nkpt=numK[i]
+            kptsl = []
+            nkpt = numK[i]
             for ix,iy,iz in itertools.product(range(-nkpt[0],nkpt[0]+1), range(-nkpt[1],nkpt[1]+1), range(-nkpt[2],nkpt[2]+1)):
-                if(np.max(np.abs(np.array([ix,iy,iz])))): kpts[i].append([ix,iy,iz])
-        kpts = torch.tensor(kpts,device=data["batch"].device)
+                if(np.max(np.abs(np.array([ix,iy,iz])))): kptsl.append([ix,iy,iz])
+            kpts.append(torch.tensor(kptsl,device=data["batch"].device))
+        #print(kpts)
         
         # == compute the energy - constant term ==
         #print("computing the energy - constant term")
@@ -205,11 +208,6 @@ class ANN_London_Long(torch.nn.Module):
             unique_batches = torch.unique(data["batch"])
             for i in unique_batches:
                 mask = data["batch"] == i  # Create a mask for the i-th configuration
-                #kvecs=(\
-                #    cellK[i,0,:].unsqueeze(-1)*kpoints[:,0]+\
-                #    cellK[i,1,:].unsqueeze(-1)*kpoints[:,1]+\
-                #    cellK[i,2,:].unsqueeze(-1)*kpoints[:,2]\
-                #) # [3,nkvec]
                 kvecs=(\
                     cellK[i,0,:].unsqueeze(-1)*kpts[i][:,0]+\
                     cellK[i,1,:].unsqueeze(-1)*kpts[i][:,1]+\
@@ -226,6 +224,8 @@ class ANN_London_Long(torch.nn.Module):
                     torch.matmul(out_node[mask],torch.cos(rdotk))**2+\
                     torch.matmul(out_node[mask],torch.sin(rdotk))**2
                 results.append(-1.0*torch.matmul(kamps,qrdotk))
+        else: 
+            results = [0.0]*nGraphs
         ek = torch.stack(results, dim=0)*self.weight
         #print("ek = ",ek)
 
@@ -266,7 +266,7 @@ class ANN_London_Long(torch.nn.Module):
     # ==== output ====
     def __repr__(self):
         return (
-            f"\n==============================================\n"
+            f"\n=========================================================\n"
             f"{self.__class__.__name__}\n"
             # keys - input/output
             f"key_input = {self.key_input}\n"
@@ -278,7 +278,7 @@ class ANN_London_Long(torch.nn.Module):
             f"key_virials = {self.key_virials}\n"
             f"key_stress = {self.key_stress}\n"
             f"key_forces_edge = {self.key_forces_edge}\n"
-            # kspace
+            # parameters
             f"rc = {self.rc}\n"
             f"kc = {self.kc}\n"
             f"prec = {self.prec}\n"
@@ -291,7 +291,8 @@ class ANN_London_Long(torch.nn.Module):
             f"linout = {self.linout}\n"
             f"weight = {self.weight}\n"
             # neural nets
-            f"{self.outnet}\n"
-            f"{self.linear_nn}\n"
-            f"**********************************************"
+            f"mlp = {self.outnet}\n"
+            f"lnn = {self.linear_nn}\n"
+            f"---------------------------------------------------------\n"
+            f"========================================================="
         )

@@ -190,7 +190,7 @@ class ANN_London_Cut(torch.nn.Module):
     # ==== output ====
     def __repr__(self):
         return (
-            f"\n==============================================\n"
+            f"\n=========================================================\n"
             f"{self.__class__.__name__}\n"
             # keys - input/output
             f"key_input = {self.key_input}\n"
@@ -202,6 +202,8 @@ class ANN_London_Cut(torch.nn.Module):
             f"key_virials = {self.key_virials}\n"
             f"key_stress = {self.key_stress}\n"
             f"key_forces_edge = {self.key_forces_edge}\n"
+            # parameters
+            f"rc = {self.rc}\n"
             # neural network
             f"n_in = {self.n_in}\n"
             f"n_out = {self.n_out}\n"
@@ -211,7 +213,8 @@ class ANN_London_Cut(torch.nn.Module):
             f"linout = {self.linout}\n"
             f"weight = {self.weight}\n"
             # neural nets
-            f"{self.outnet}\n"
-            f"{self.linear_nn}\n"
-            f"**********************************************"
+            f"mlp = {self.outnet}\n"
+            f"lnn = {self.linear_nn}\n"
+            f"---------------------------------------------------------\n"
+            f"========================================================="
         )
