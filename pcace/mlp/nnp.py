@@ -127,7 +127,7 @@ class NNP(torch.nn.Module):
     # ==== output ====
     def __repr__(self):
         return (
-            f"\n==============================================\n"
+            f"\n=========================================================\n"
             f"{self.__class__.__name__}\n"
             # keys - energy/force
             f"key_energy = {self.key_energy}\n"
@@ -137,8 +137,8 @@ class NNP(torch.nn.Module):
             f"key_forces_edge = {self.key_forces_edge}\n"
             # representation
             f"rep = {self.rep}\n"
-            # atomic neural network
-            f"ann_len = {len(self.annl)}\n"
+            # atomic neural networks
             f"annl = {self.annl}\n"
-            f"**********************************************"
+            f"---------------------------------------------------------\n"
+            f"========================================================="
         )
