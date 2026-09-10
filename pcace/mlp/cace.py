@@ -147,7 +147,7 @@ class CACE(torch.nn.Module):
                 + data["shifts"]  # [n_edges, 3]
         edge_lengths = torch.linalg.norm(data["vectors"], dim=-1, keepdim=True)  # [n_edges, 1]
         edge_vectors = data["vectors"] / (edge_lengths + 1e-16) # [n_edges, 3]
-        #print("nedges = ",edge_lengths.size)
+        #print("nedges = ",edge_lengths.shape)
         
         # == compute angular and radial terms ==
         radial_component = self.radial(edge_lengths) # [n_edges, dim_radial]
@@ -201,9 +201,9 @@ class CACE(torch.nn.Module):
         # node_S : [n_nodes, dim_radial_embed, dim_ang_prod, dim_edge_encode]
         dim_ang_prod = self.angprod.size
         node_S = torch.zeros((
-            n_nodes, 
-            self.dim_radial_embed, 
-            dim_ang_prod, 
+            n_nodes,
+            self.dim_radial_embed,
+            dim_ang_prod,
             self.dim_edge_encode),
         device=device)
 
@@ -266,13 +266,16 @@ class CACE(torch.nn.Module):
     # ==== output ====
     def __repr__(self):
         return (
-            f"\n==============================================\n"
+            f"\n=========================================================\n"
             f"{self.__class__.__name__}\n"
+            # atomic numbers
             f"z_list = {self.z_list}\n"
+            # basis
             f"cutoff = {self.cutoff}\n"
             f"radial  = {self.radial}\n"
             f"angular = {self.angular}\n"
             f"product = {self.angprod}\n"
+            # node/edge encoding/embedding
             f"n_input = {self.n_input}\n"
             f"dim_node_embed   = {self.dim_node_embed}\n"
             f"dim_edge_encode  = {self.dim_edge_encode}\n"
@@ -280,5 +283,6 @@ class CACE(torch.nn.Module):
             f"node_encoder = {self.node_encoder}\n"
             f"node_embedder_send = {self.node_embedder_send}\n"
             f"node_embedder_recv = {self.node_embedder_recv}\n"
-            f"=============================================="
+            f"---------------------------------------------------------\n"
+            f"========================================================="
         )
