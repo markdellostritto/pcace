@@ -37,6 +37,8 @@ representation of the local density.
 * type.py		- Encodings/Embeddings of Elements/Types
 * force.py		- Class to compute forces from atomic structures and energies
 * nnp.py		- Neural Network Potential - Local Rep. + Atomic Neural Networks
+* nnh.py		- Neural Network Hamiltonian - Local Rep. + Atomic Neural Network
+* nns.py		- Neural Network Surface - Set of NNHs
 * ann_sr.py		- ANN - short-range energies
 * ann_pauli_gauss.py	- ANN - Z - Pauli repulsion - Gaussian overlap
 * ann_pauli_sech.py	- ANN - Z - Pauli repulsion - Logistic overlap
@@ -76,6 +78,15 @@ Modern versions of setuptools have deprecated setup.py as a command line tool.  
 one should instead use pip with the following command in the same folder as setup.py:
 
 pip3 install .
+
+## TRAINING - METHODS
+
+Note the difference between NNP and NNS.  These two codes are effectively the same with only a small difference in implementation.
+The NNP object contains a single representation which serves as the input for several different atomic neural networks (ANNs).
+The NNS object on the other hand holds a list of NNHs, each of which has a single representation and a single associated ANN.
+Thus, both NNP and NNS aggregate the energy from several ANNs, but NNP has only one representation but NNS allows for a unique
+representation for each ANN.  Overall, NNS is easier to train because it's easier to train parts of the model (e.g. one NNH at a time)
+as well as to use different representations with different sizes for different ANNs.
 	
 ## TRAINING - DATA
 
