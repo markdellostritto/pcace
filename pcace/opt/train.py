@@ -47,7 +47,7 @@ class TrainingTask(nn.Module):
         ema_start: int = 0,
         # misc
         max_grad_norm: float = 10,
-        warmup_steps: int = 0,                
+        warmup_steps: int = 0,
     ):
         super().__init__()
         # data
@@ -55,7 +55,10 @@ class TrainingTask(nn.Module):
         self.model = model.to(self.device)
         self.losses = nn.ModuleList(losses).to(self.device)
         self.metrics = nn.ModuleList(metrics).to(self.device)
-        self.optimizer = optimizer_cls(self.parameters(), **optimizer_args)
+        if 'params' in optimizer_args:
+            self.optimizer = optimizer_cls(**optimizer_args)
+        else: 
+            self.optimizer = optimizer_cls(self.parameters(), **optimizer_args)
         self.scheduler = scheduler_cls(self.optimizer, **scheduler_args) if scheduler_cls else None
         # ema
         self.ema = ema
