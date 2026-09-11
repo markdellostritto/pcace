@@ -1,5 +1,7 @@
 # ==== nnp ====
 from .nnp import *
+from .nns import *
+from .nnh import *
 from .force import *
 # ==== representation ====
 from .type import *
