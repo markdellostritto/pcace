@@ -63,7 +63,8 @@ class CACECalculator(Calculator):
         self.charge_unit = charge_unit
 
         # == set the cutoff ==
-        self.cutoff = self.model.rep.cutoff.rc.clone().detach().item()
+        #self.cutoff = self.model.rep.cutoff.rc.clone().detach().item()
+        self.cutoff = self.model.rc.clone().detach().item()
         
         # == set atomic energies ==
         self.atomic_energies = atomic_energies
@@ -72,7 +73,7 @@ class CACECalculator(Calculator):
         #print("setting data keys")
         self.compute_stress = compute_stress
         self.model.compute_stress = compute_stress
-        self.key_data   = key_data
+        self.key_data = key_data
 
         # turn off gradients for efficiency
         for param in self.model.parameters():
