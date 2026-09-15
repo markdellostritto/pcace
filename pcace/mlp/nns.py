@@ -26,6 +26,9 @@ class NNS(torch.nn.Module):
         super().__init__()
         # hamiltonian list
         self.nnhl = nnhl
+        self.rc = 0.0
+        for nnh in nnhl:
+            if(nnh.rep.cutoff.rc>self.rc): self.rc=nnh.rep.cutoff.rc
         # set keys
         self.key_energy = key_energy
         self.key_forces = key_forces
@@ -128,6 +131,7 @@ class NNS(torch.nn.Module):
             f"key_virials = {self.key_virials}\n"
             f"key_forces_edge = {self.key_forces_edge}\n"
             # neural network hamiltonians
+            f"rc   = {self.rc}\n"
             f"nnhl = {self.nnhl}\n"
             f"---------------------------------------------------------\n"
             f"========================================================="
