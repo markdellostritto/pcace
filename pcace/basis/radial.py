@@ -3,16 +3,30 @@
 #****************************************************
 
 import torch
+import numpy as np
 
 __all__ = [
     "RadialBesselJ",
+    "RadialBesselJN",
+    "RadialBesselJS",
+    "RadialBesselJA",
+    "RadialBesselJB",
     "RadialBesselY",
+    "RadialBesselYN",
+    "RadialBesselYS",
+    "RadialBesselYA",
+    "RadialBesselYB",
+    "RadialMorletJ",
+    "RadialMorletY",
     "RadialGaussian",
+    "RadialHermite1",
+    "RadialHermite2",
+    "RadialHermite3",
+    "RadialExp",
     "RadialLogistic",
     "RadialLogCosh",
-    "RadialExp",
     "RadialSoftPlus",
-    "RadialChebyshev"
+    "RadialChebyshev",
 ]
 
 #****************************************************
@@ -44,6 +58,7 @@ class RadialBesselJ(torch.nn.Module):
         self.nr = nr
         self.rc = rc
         # set the weights
+        #w = torch.pi/rc * torch.linspace(1.0,nr,nr)
         w = torch.pi/rc * torch.linspace(1.0,nr,nr)
         if train: 
             self.w = torch.nn.Parameter(w,requires_grad=True)
@@ -53,6 +68,110 @@ class RadialBesselJ(torch.nn.Module):
     # ==== calculation ====
     def forward(self, dr: torch.Tensor) -> torch.Tensor:  # [..., 1]
         return torch.sin(self.w*dr)/dr
+        
+    # ==== output ====
+    def __repr__(self):
+        return (
+            f"{self.__class__.__name__}(rc={self.rc}, nr={len(self.w)}, "
+            f"train={self.w.requires_grad})"
+        )
+
+class RadialBesselJN(torch.nn.Module):
+    # ==== initialization ====
+    def __init__(self, rc: float, nr: int, train=False):
+        super().__init__()
+        # set parameters
+        self.nr = nr
+        self.rc = rc
+        self.register_buffer("pf", torch.tensor(np.sqrt(2.0/self.rc), dtype=torch.get_default_dtype()))
+        # set the weights
+        w = torch.pi/rc * torch.linspace(1.0,nr,nr)
+        if train: 
+            self.w = torch.nn.Parameter(w,requires_grad=True)
+        else: 
+            self.register_buffer("w", w)
+        
+    # ==== calculation ====
+    def forward(self, dr: torch.Tensor) -> torch.Tensor:  # [..., 1]
+        return self.pf*torch.sin(self.w*dr)/dr
+        
+    # ==== output ====
+    def __repr__(self):
+        return (
+            f"{self.__class__.__name__}(rc={self.rc}, nr={len(self.w)}, "
+            f"train={self.w.requires_grad})"
+        )
+
+class RadialBesselJS(torch.nn.Module):
+    # ==== initialization ====
+    def __init__(self, rc: float, nr: int, train=False):
+        super().__init__()
+        # set parameters
+        self.nr = nr
+        self.rc = rc
+        self.register_buffer("pf", torch.tensor(np.sqrt(2.0/self.rc), dtype=torch.get_default_dtype()))
+        # set the weights
+        w = torch.pi/rc * torch.linspace(1.0,nr,nr)
+        if train: 
+            self.w = torch.nn.Parameter(w,requires_grad=True)
+        else: 
+            self.register_buffer("w", w)
+        
+    # ==== calculation ====
+    def forward(self, dr: torch.Tensor) -> torch.Tensor:  # [..., 1]
+        return self.pf*torch.sin(self.w*torch.sqrt(dr))/dr
+        
+    # ==== output ====
+    def __repr__(self):
+        return (
+            f"{self.__class__.__name__}(rc={self.rc}, nr={len(self.w)}, "
+            f"train={self.w.requires_grad})"
+        )
+
+class RadialBesselJA(torch.nn.Module):
+    # ==== initialization ====
+    def __init__(self, rc: float, nr: int, train=False):
+        super().__init__()
+        # set parameters
+        self.nr = nr
+        self.rc = rc
+        self.register_buffer("pf", torch.tensor(np.sqrt(2.0/self.rc), dtype=torch.get_default_dtype()))
+        # set the weights
+        w = torch.pi/rc * torch.linspace(1.0,nr,nr)
+        if train: 
+            self.w = torch.nn.Parameter(w,requires_grad=True)
+        else: 
+            self.register_buffer("w", w)
+        
+    # ==== calculation ====
+    def forward(self, dr: torch.Tensor) -> torch.Tensor:  # [..., 1]
+        return self.pf*torch.sin(self.w*torch.asinh(dr))/dr
+        
+    # ==== output ====
+    def __repr__(self):
+        return (
+            f"{self.__class__.__name__}(rc={self.rc}, nr={len(self.w)}, "
+            f"train={self.w.requires_grad})"
+        )
+
+class RadialBesselJB(torch.nn.Module):
+    # ==== initialization ====
+    def __init__(self, rc: float, nr: int, train=False):
+        super().__init__()
+        # set parameters
+        self.nr = nr
+        self.register_buffer("rc", torch.tensor(rc, dtype=torch.get_default_dtype()))
+        self.register_buffer("pf", torch.tensor(np.sqrt(2.0/rc), dtype=torch.get_default_dtype()))
+        # set the weights
+        w = torch.linspace(1.0,nr,nr)
+        if train: 
+            self.w = torch.nn.Parameter(w,requires_grad=True)
+        else: 
+            self.register_buffer("w", w)
+        
+    # ==== calculation ====
+    def forward(self, dr: torch.Tensor) -> torch.Tensor:  # [..., 1]
+        return self.pf*torch.sin(self.w*torch.asinh(dr*torch.pi/self.rc))/dr
         
     # ==== output ====
     def __repr__(self):
@@ -103,6 +222,160 @@ class RadialBesselY(torch.nn.Module):
             f"train={self.w.requires_grad})"
         )
 
+class RadialBesselYN(torch.nn.Module):
+    # ==== initialization ====
+    def __init__(self, rc: float, nr: int, train=False):
+        super().__init__()
+        # set parameters
+        self.nr = nr
+        self.rc = rc
+        self.register_buffer("pf", torch.tensor(np.sqrt(2.0/self.rc), dtype=torch.get_default_dtype()))
+        # set the weights
+        w = torch.pi/rc * torch.linspace(1.0,nr,nr)
+        if train: 
+            self.w = torch.nn.Parameter(w,requires_grad=True)
+        else: 
+            self.register_buffer("w", w)
+        
+    # ==== calculation ====
+    def forward(self, dr: torch.Tensor) -> torch.Tensor:  # [..., 1]
+        return self.pf*torch.cos(self.w*dr)/dr
+        
+    # ==== output ====
+    def __repr__(self):
+        return (
+            f"{self.__class__.__name__}(rc={self.rc}, nr={len(self.w)}, "
+            f"train={self.w.requires_grad})"
+        )
+
+class RadialBesselYS(torch.nn.Module):
+    # ==== initialization ====
+    def __init__(self, rc: float, nr: int, train=False):
+        super().__init__()
+        # set parameters
+        self.nr = nr
+        self.rc = rc
+        self.register_buffer("pf", torch.tensor(np.sqrt(2.0/self.rc), dtype=torch.get_default_dtype()))
+        # set the weights
+        w = torch.pi/rc * torch.linspace(1.0,nr,nr)
+        if train: 
+            self.w = torch.nn.Parameter(w,requires_grad=True)
+        else: 
+            self.register_buffer("w", w)
+        
+    # ==== calculation ====
+    def forward(self, dr: torch.Tensor) -> torch.Tensor:  # [..., 1]
+        return self.pf*torch.cos(self.w*torch.sqrt(dr))/dr
+        
+    # ==== output ====
+    def __repr__(self):
+        return (
+            f"{self.__class__.__name__}(rc={self.rc}, nr={len(self.w)}, "
+            f"train={self.w.requires_grad})"
+        )
+
+class RadialBesselYA(torch.nn.Module):
+    # ==== initialization ====
+    def __init__(self, rc: float, nr: int, train=False):
+        super().__init__()
+        # set parameters
+        self.nr = nr
+        self.rc = rc
+        self.register_buffer("pf", torch.tensor(np.sqrt(2.0/self.rc), dtype=torch.get_default_dtype()))
+        # set the weights
+        w = torch.pi/rc * torch.linspace(1.0,nr,nr)
+        if train: 
+            self.w = torch.nn.Parameter(w,requires_grad=True)
+        else: 
+            self.register_buffer("w", w)
+        
+    # ==== calculation ====
+    def forward(self, dr: torch.Tensor) -> torch.Tensor:  # [..., 1]
+        return self.pf*torch.cos(self.w*torch.asinh(dr))/dr
+        
+    # ==== output ====
+    def __repr__(self):
+        return (
+            f"{self.__class__.__name__}(rc={self.rc}, nr={len(self.w)}, "
+            f"train={self.w.requires_grad})"
+        )
+
+class RadialBesselYB(torch.nn.Module):
+    # ==== initialization ====
+    def __init__(self, rc: float, nr: int, train=False):
+        super().__init__()
+        # set parameters
+        self.nr = nr
+        self.register_buffer("rc", torch.tensor(rc, dtype=torch.get_default_dtype()))
+        self.register_buffer("pf", torch.tensor(np.sqrt(2.0/rc), dtype=torch.get_default_dtype()))
+        # set the weights
+        w = torch.linspace(1.0,nr,nr)
+        if train: 
+            self.w = torch.nn.Parameter(w,requires_grad=True)
+        else: 
+            self.register_buffer("w", w)
+        
+    # ==== calculation ====
+    def forward(self, dr: torch.Tensor) -> torch.Tensor:  # [..., 1]
+        return self.pf*torch.cos(self.w*torch.asinh(dr*torch.pi/self.rc))/dr
+        
+    # ==== output ====
+    def __repr__(self):
+        return (
+            f"{self.__class__.__name__}(rc={self.rc}, nr={len(self.w)}, "
+            f"train={self.w.requires_grad})"
+        )
+
+class RadialMorletJ(torch.nn.Module):
+    # ==== initialization ====
+    def __init__(self, rc: float, nr: int, train=False):
+        super().__init__()
+        # set parameters
+        self.nr = nr
+        self.register_buffer("rc", torch.tensor(rc, dtype=torch.get_default_dtype()))
+        # set the weights
+        w = 1.0/rc * torch.linspace(1.0,nr,nr)
+        if train: 
+            self.w = torch.nn.Parameter(w,requires_grad=True)
+        else: 
+            self.register_buffer("w", w)
+        
+    # ==== calculation ====
+    def forward(self, dr: torch.Tensor) -> torch.Tensor:  # [..., 1]
+        return torch.sin(self.w*dr)*torch.exp(-0.5*(3.0*dr/self.rc)**2)
+        
+    # ==== output ====
+    def __repr__(self):
+        return (
+            f"{self.__class__.__name__}(rc={self.rc}, nr={len(self.w)}, "
+            f"train={self.w.requires_grad})"
+        )
+
+class RadialMorletY(torch.nn.Module):
+    # ==== initialization ====
+    def __init__(self, rc: float, nr: int, train=False):
+        super().__init__()
+        # set parameters
+        self.nr = nr
+        self.register_buffer("rc", torch.tensor(rc, dtype=torch.get_default_dtype()))
+        # set the weights
+        w = torch.pi/rc * torch.linspace(1.0,nr,nr)
+        if train: 
+            self.w = torch.nn.Parameter(w,requires_grad=True)
+        else: 
+            self.register_buffer("w", w)
+        
+    # ==== calculation ====
+    def forward(self, dr: torch.Tensor) -> torch.Tensor:  # [..., 1]
+        return torch.cos(self.w*dr)*torch.exp(-0.5*(3.0*dr/self.rc)**2)
+        
+    # ==== output ====
+    def __repr__(self):
+        return (
+            f"{self.__class__.__name__}(rc={self.rc}, nr={len(self.w)}, "
+            f"train={self.w.requires_grad})"
+        )
+
 """
     Gaussian radial functions
     @member rc - cutoff distance
@@ -138,7 +411,124 @@ class RadialGaussian(torch.nn.Module):
             f"{self.__class__.__name__}(rc={self.rc}, nr={len(self.w)}, "
             f"train={self.w.requires_grad})"
         )
+
+class RadialHermite1(torch.nn.Module):
+    # ==== initialization ====
+    def __init__(self, rc: float, nr: int, train=False):
+        super().__init__()
+        # set parameters
+        self.nr = nr
+        self.rc = rc
+        # set the weights
+        w = 1.0/rc * torch.linspace(1.0,nr,nr)
+        # set train
+        if train: 
+            self.w = torch.nn.Parameter(w,requires_grad=True)
+        else: 
+            self.register_buffer("weights", w)
+        
+    # ==== calculation ====
+    def forward(self, dr: torch.Tensor) -> torch.Tensor:  # [..., 1]
+        arg=(dr*self.w)
+        return torch.sqrt(torch.abs(self.w))\
+            *arg*torch.exp(-0.5*arg*arg)
+        
+    # ==== output ====
+    def __repr__(self):
+        return (
+            f"{self.__class__.__name__}(rc={self.rc}, nr={len(self.w)}, "
+            f"train={self.w.requires_grad})"
+        )
+
+class RadialHermite2(torch.nn.Module):
+    # ==== initialization ====
+    def __init__(self, rc: float, nr: int, train=False):
+        super().__init__()
+        # set parameters
+        self.nr = nr
+        self.rc = rc
+        # set the weights
+        w = 1.0/rc * torch.linspace(1.0,nr,nr)
+        # set train
+        if train: 
+            self.w = torch.nn.Parameter(w,requires_grad=True)
+        else: 
+            self.register_buffer("weights", w)
+        
+    # ==== calculation ====
+    def forward(self, dr: torch.Tensor) -> torch.Tensor:  # [..., 1]
+        arg=(dr*self.w)**2
+        return torch.sqrt(torch.abs(self.w))*\
+            (1.0-arg)*torch.exp(-0.5*arg)
+        
+    # ==== output ====
+    def __repr__(self):
+        return (
+            f"{self.__class__.__name__}(rc={self.rc}, nr={len(self.w)}, "
+            f"train={self.w.requires_grad})"
+        )
+
+class RadialHermite3(torch.nn.Module):
+    # ==== initialization ====
+    def __init__(self, rc: float, nr: int, train=False):
+        super().__init__()
+        # set parameters
+        self.nr = nr
+        self.rc = rc
+        # set the weights
+        w = 1.0/rc * torch.linspace(1.0,nr,nr)
+        # set train
+        if train: 
+            self.w = torch.nn.Parameter(w,requires_grad=True)
+        else: 
+            self.register_buffer("weights", w)
+        
+    # ==== calculation ====
+    def forward(self, dr: torch.Tensor) -> torch.Tensor:  # [..., 1]
+        arg=(dr*self.w)
+        return torch.sqrt(torch.abs(self.w))\
+            *arg*(1.0-2.0/3.0*arg*arg)*torch.exp(-0.5*arg*arg)
+        
+    # ==== output ====
+    def __repr__(self):
+        return (
+            f"{self.__class__.__name__}(rc={self.rc}, nr={len(self.w)}, "
+            f"train={self.w.requires_grad})"
+        )
+
+"""
+    Exponential radial functions
+    @member rc - cutoff distance
+    @member nr - number of radial functions
+    @member weights - weights associated with each function (positions)
+    @member train - whether to train the parameters
+"""
+class RadialExp(torch.nn.Module):
+   # ==== initialization ====
+    def __init__(self, rc: float, nr: int, train=False):
+        super().__init__()
+        # set parameters
+        self.nr = nr
+        self.rc = rc
+        # set the weights
+        w = torch.pi/rc * torch.linspace(1.0,nr,nr)
+        # set train
+        if train: 
+            self.w = torch.nn.Parameter(w,requires_grad=True)
+        else: 
+            self.register_buffer("w", w)
+        
+    # ==== calculation ====
+    def forward(self, dr: torch.Tensor) -> torch.Tensor:  # [..., 1]
+        return torch.exp(-self.w*dr)
     
+    # ==== output ====
+    def __repr__(self):
+        return (
+            f"{self.__class__.__name__}(rc={self.rc}, nr={len(self.w)}, "
+            f"train={self.w.requires_grad})"
+        )
+
 """
     Logistic radial functions
     @member rc - cutoff distance
@@ -209,39 +599,6 @@ class RadialLogCosh(torch.nn.Module):
         return (
             f"{self.__class__.__name__}(rc={self.rc}, nr={len(self.a)}, "
             f"train={self.a.requires_grad})"
-        )
-
-"""
-    Exponential radial functions
-    @member rc - cutoff distance
-    @member nr - number of radial functions
-    @member weights - weights associated with each function (positions)
-    @member train - whether to train the parameters
-"""
-class RadialExp(torch.nn.Module):
-   # ==== initialization ====
-    def __init__(self, rc: float, nr: int, train=False):
-        super().__init__()
-        # set parameters
-        self.nr = nr
-        self.rc = rc
-        # set the weights
-        w = torch.pi/rc * torch.linspace(1.0,nr,nr)
-        # set train
-        if train: 
-            self.w = torch.nn.Parameter(w,requires_grad=True)
-        else: 
-            self.register_buffer("w", w)
-        
-    # ==== calculation ====
-    def forward(self, dr: torch.Tensor) -> torch.Tensor:  # [..., 1]
-        return torch.exp(-self.w*dr)
-    
-    # ==== output ====
-    def __repr__(self):
-        return (
-            f"{self.__class__.__name__}(rc={self.rc}, nr={len(self.w)}, "
-            f"train={self.w.requires_grad})"
         )
 
 class RadialSoftPlus(torch.nn.Module):
