@@ -69,7 +69,6 @@ class CACE(torch.nn.Module):
         
         # == edge encoding ==
         self.edge_encoder = EdgeEncoder(directed=True)
-        #self.dim_edge_encode = self.dim_node_embed**2
         self.register_buffer(
             "dim_edge_encode", torch.tensor(self.dim_node_embed**2, dtype=torch.int)
         )
@@ -90,7 +89,7 @@ class CACE(torch.nn.Module):
         
         # == set radial transform ==
         self.rt_weights = torch.nn.ParameterList([
-            torch.nn.Parameter(torch.rand([
+            torch.nn.Parameter(torch.randn([
                 self.dim_radial, self.dim_radial_embed, self.dim_edge_encode
             ]),requires_grad=True) 
             for l in range(0,angular.l_max+1)
@@ -196,14 +195,14 @@ class CACE(torch.nn.Module):
             # Apply the transformation for all angular dims in the entire group at once
             node_T[:, :, lgroup, :] = torch.einsum('ijkh,jmh->imkh', node_A[:, :, lgroup, :], weight)
         #print("node_T = ",node_T.size())
-            
+        
         # == symmetrize the basis ==
         # node_S : [n_nodes, dim_radial_embed, dim_ang_prod, dim_edge_encode]
-        dim_ang_prod = self.angprod.size
+        #dim_ang_prod = self.angprod.size
         node_S = torch.zeros((
             n_nodes,
             self.dim_radial_embed,
-            dim_ang_prod,
+            self.angprod.size,
             self.dim_edge_encode),
         device=device)
 
@@ -275,6 +274,7 @@ class CACE(torch.nn.Module):
             f"radial  = {self.radial}\n"
             f"angular = {self.angular}\n"
             f"product = {self.angprod}\n"
+            f"rt_weights = {self.rt_weights}\n"
             # node/edge encoding/embedding
             f"n_input = {self.n_input}\n"
             f"dim_node_embed   = {self.dim_node_embed}\n"
