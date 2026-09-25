@@ -32,7 +32,8 @@ class IERF(torch.nn.Module):
         super(IERF, self).__init__()
     # ==== calculation ====
     def forward(self, x):
-        return 0.5*(x*(torch.erf(x)+1.0)+(torch.exp(-x*x)-1.0)/np.sqrt(np.pi))
+        #return 0.5*(x*(torch.erf(x)+1.0)+(torch.exp(-x*x)-1.0)/np.sqrt(np.pi))
+        return 0.5*(x*(torch.erf(x)+1.0)+(torch.exp(-x*x)-1.0)/1.772453850905516)
 
 """
 class IERFFunction(torch.autograd.Function):
