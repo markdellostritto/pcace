@@ -126,7 +126,7 @@ def get_forces_virials(
         stress = virials / volume.view(-1, 1, 1)
     # return zero in case of an error
     if gradient is None: gradient = torch.zeros_like(positions)
-    if virials is None: virials = torch.zeros((1, 3, 3))
+    if virials is None: virials = torch.zeros((1, 3, 3),device=positions.device)
     # multiply by -1 
     return -1 * gradient, -1 * virials, stress
 
