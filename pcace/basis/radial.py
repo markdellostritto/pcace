@@ -8,12 +8,10 @@ import numpy as np
 __all__ = [
     "RadialBesselJ",
     "RadialBesselJN",
-    "RadialBesselJS",
     "RadialBesselJA",
     "RadialBesselJB",
     "RadialBesselY",
     "RadialBesselYN",
-    "RadialBesselYS",
     "RadialBesselYA",
     "RadialBesselYB",
     "RadialMorletJ",
@@ -58,7 +56,6 @@ class RadialBesselJ(torch.nn.Module):
         self.nr = nr
         self.rc = rc
         # set the weights
-        #w = torch.pi/rc * torch.linspace(1.0,nr,nr)
         w = torch.pi/rc * torch.linspace(1.0,nr,nr)
         if train: 
             self.w = torch.nn.Parameter(w,requires_grad=True)
@@ -94,32 +91,6 @@ class RadialBesselJN(torch.nn.Module):
     # ==== calculation ====
     def forward(self, dr: torch.Tensor) -> torch.Tensor:  # [..., 1]
         return self.pf*torch.sin(self.w*dr)/dr
-        
-    # ==== output ====
-    def __repr__(self):
-        return (
-            f"{self.__class__.__name__}(rc={self.rc}, nr={len(self.w)}, "
-            f"train={self.w.requires_grad})"
-        )
-
-class RadialBesselJS(torch.nn.Module):
-    # ==== initialization ====
-    def __init__(self, rc: float, nr: int, train=False):
-        super().__init__()
-        # set parameters
-        self.nr = nr
-        self.rc = rc
-        self.register_buffer("pf", torch.tensor(np.sqrt(2.0/self.rc), dtype=torch.get_default_dtype()))
-        # set the weights
-        w = torch.pi/rc * torch.linspace(1.0,nr,nr)
-        if train: 
-            self.w = torch.nn.Parameter(w,requires_grad=True)
-        else: 
-            self.register_buffer("w", w)
-        
-    # ==== calculation ====
-    def forward(self, dr: torch.Tensor) -> torch.Tensor:  # [..., 1]
-        return self.pf*torch.sin(self.w*torch.sqrt(dr))/dr
         
     # ==== output ====
     def __repr__(self):
@@ -248,32 +219,6 @@ class RadialBesselYN(torch.nn.Module):
             f"train={self.w.requires_grad})"
         )
 
-class RadialBesselYS(torch.nn.Module):
-    # ==== initialization ====
-    def __init__(self, rc: float, nr: int, train=False):
-        super().__init__()
-        # set parameters
-        self.nr = nr
-        self.rc = rc
-        self.register_buffer("pf", torch.tensor(np.sqrt(2.0/self.rc), dtype=torch.get_default_dtype()))
-        # set the weights
-        w = torch.pi/rc * torch.linspace(1.0,nr,nr)
-        if train: 
-            self.w = torch.nn.Parameter(w,requires_grad=True)
-        else: 
-            self.register_buffer("w", w)
-        
-    # ==== calculation ====
-    def forward(self, dr: torch.Tensor) -> torch.Tensor:  # [..., 1]
-        return self.pf*torch.cos(self.w*torch.sqrt(dr))/dr
-        
-    # ==== output ====
-    def __repr__(self):
-        return (
-            f"{self.__class__.__name__}(rc={self.rc}, nr={len(self.w)}, "
-            f"train={self.w.requires_grad})"
-        )
-
 class RadialBesselYA(torch.nn.Module):
     # ==== initialization ====
     def __init__(self, rc: float, nr: int, train=False):
@@ -334,7 +279,7 @@ class RadialMorletJ(torch.nn.Module):
         self.nr = nr
         self.register_buffer("rc", torch.tensor(rc, dtype=torch.get_default_dtype()))
         # set the weights
-        w = 1.0/rc * torch.linspace(1.0,nr,nr)
+        w = torch.pi/rc * torch.linspace(1.0,nr,nr)
         if train: 
             self.w = torch.nn.Parameter(w,requires_grad=True)
         else: 
@@ -342,7 +287,7 @@ class RadialMorletJ(torch.nn.Module):
         
     # ==== calculation ====
     def forward(self, dr: torch.Tensor) -> torch.Tensor:  # [..., 1]
-        return torch.sin(self.w*dr)*torch.exp(-0.5*(3.0*dr/self.rc)**2)
+        return torch.sin(self.w*dr)*torch.exp(-dr*torch.pi/self.rc)
         
     # ==== output ====
     def __repr__(self):
@@ -367,7 +312,7 @@ class RadialMorletY(torch.nn.Module):
         
     # ==== calculation ====
     def forward(self, dr: torch.Tensor) -> torch.Tensor:  # [..., 1]
-        return torch.cos(self.w*dr)*torch.exp(-0.5*(3.0*dr/self.rc)**2)
+        return torch.cos(self.w*dr)*torch.exp(-dr*torch.pi/self.rc)
         
     # ==== output ====
     def __repr__(self):
