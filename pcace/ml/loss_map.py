@@ -6,6 +6,7 @@ class NormT(Enum):
     NONE = 1
     LINEAR = 2
     SQRT = 3
+    ASINH = 4
 
 """
     Defines mappings to a loss function and weight for training
@@ -80,6 +81,8 @@ class LossMap(torch.nn.Module):
                     loss = loss_wt * self.loss_fn(pred_tensor/nAtoms, target_tensor/nAtoms)
                 case NormT.SQRT: 
                     loss = loss_wt * self.loss_fn(pred_tensor/torch.sqrt(nAtoms), target_tensor/torch.sqrt(nAtoms))
+                case NormT.ASINH: 
+                    loss = loss_wt * self.loss_fn(pred_tensor/torch.asinh(nAtoms), target_tensor/torch.asinh(nAtoms))
                 case _: raise ValueError('Invalid normalization method.')
         else: 
             # loss - force
@@ -87,11 +90,14 @@ class LossMap(torch.nn.Module):
                 case NormT.NONE: 
                     loss = loss_wt * self.loss_fn(pred_tensor, target_tensor)
                 case NormT.LINEAR: 
-                    nAtomsV=nAtoms[target['batch']].unsqueeze(-1).expand(-1,3).clone()
+                    nAtomsV = nAtoms[target['batch']].unsqueeze(-1).expand(-1,3).clone()
                     loss = loss_wt * self.loss_fn(pred_tensor/nAtomsV, target_tensor/nAtomsV)
                 case NormT.SQRT: 
-                    nAtomsV=nAtoms[target['batch']].unsqueeze(-1).expand(-1,3).clone()
+                    nAtomsV = nAtoms[target['batch']].unsqueeze(-1).expand(-1,3).clone()
                     loss = loss_wt * self.loss_fn(pred_tensor/torch.sqrt(nAtomsV), target_tensor/torch.sqrt(nAtomsV))
+                case NormT.ASINH: 
+                    nAtomsV = nAtoms[target['batch']].unsqueeze(-1).expand(-1,3).clone()
+                    loss = loss_wt * self.loss_fn(pred_tensor/torch.asinh(nAtomsV), target_tensor/torch.asinh(nAtomsV))
                 case _: raise ValueError('Invalid normalization method.')
         # return the loss
         return loss
