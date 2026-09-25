@@ -46,7 +46,6 @@ class ANN_LDamp_Long(torch.nn.Module):
         rc: float = 0.0,
         kc: float = 1.0,
         prec: float = 1.0e-6,
-        alpha: float = 6.0,
         # elements
         radii: Dict[int,float] = None,
         # keys - input/output
@@ -72,8 +71,6 @@ class ANN_LDamp_Long(torch.nn.Module):
 
         # == set potential parameters ==
         self.register_buffer("rc", torch.tensor(rc, dtype=torch.get_default_dtype()))
-        self.register_buffer("alpha", torch.tensor(alpha, dtype=torch.get_default_dtype()))
-        self.register_buffer("beta", torch.tensor(6.0/alpha, dtype=torch.get_default_dtype()))
         self.register_buffer("kc", torch.tensor(kc, dtype=torch.get_default_dtype()))
         self.register_buffer("prec", torch.tensor(prec, dtype=torch.get_default_dtype()))
         
@@ -200,7 +197,7 @@ class ANN_LDamp_Long(torch.nn.Module):
             *data[self.key_output_node][data["edge_index"][1]]\
             *torch.exp(-1.0*scaled_lengths2)\
             *(1.0+scaled_lengths2*(1.0+0.5*scaled_lengths2))\
-            *1.0/(edge_lengths**self.alpha+rvdw_edge**self.alpha)**self.beta
+            *1.0/(edge_lengths**6.0+rvdw_edge**6.0)
             #*(edge_lengths<self.rc).float()
         #energy_edge = 1.0\
         #    *data[self.key_output_node][data["edge_index"][0]]\
@@ -302,8 +299,6 @@ class ANN_LDamp_Long(torch.nn.Module):
             f"key_forces_edge = {self.key_forces_edge}\n"
             # parameters
             f"rc = {self.rc}\n"
-            f"alpha = {self.alpha}\n"
-            f"beta = {self.beta}\n"
             f"kc = {self.kc}\n"
             f"prec = {self.prec}\n"
             # elements
