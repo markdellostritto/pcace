@@ -1,5 +1,4 @@
 import torch
-import torch.nn as nn
 from typing import Sequence
 
 __all__ = [
@@ -14,15 +13,15 @@ __all__ = [
     This class uses a table of possible atomic numbers to create
     a one-hot encoding of atomic numbers.
 """
-class NodeEncoder(nn.Module):
+class NodeEncoder(torch.nn.Module):
     #==== initialization ====
     def __init__(self, zlist: Sequence[int]):
         super().__init__()
-        self.nz = len(zlist)
+        self.register_buffer("nz", torch.tensor(len(zlist),dtype=torch.int))
         self.register_buffer("zmap", 
             torch.tensor(
                 [zlist.index(z) if z in zlist else -1 for z in range(max(zlist) + 1)], 
-                dtype=torch.int64
+                dtype=torch.int
             )
         )
 
@@ -51,7 +50,7 @@ class NodeEncoder(nn.Module):
     with dimension embedding_dimension.  The weights are normally distributed initially,
     with the possibility of training.
 """
-class NodeEmbedder(nn.Module):
+class NodeEmbedder(torch.nn.Module):
     #==== initialization ====
     """
         dim_node - the intial dimension of the nodes (e.g. the number of elements)
@@ -65,9 +64,9 @@ class NodeEmbedder(nn.Module):
         weights = torch.Tensor(dim_node, dim_embed)
         # initialize
         if random_seed is not None: torch.manual_seed(random_seed)
-        nn.init.xavier_uniform_(weights)
+        torch.nn.init.xavier_uniform_(weights)
         # set trainable
-        if trainable: self.weights = nn.Parameter(weights,requires_grad=True)
+        if trainable: self.weights = torch.nn.Parameter(weights,requires_grad=True)
         else: self.register_buffer("weights", weights)
 
     #==== calculation ====
@@ -83,7 +82,7 @@ class NodeEmbedder(nn.Module):
 """
     EdgeEncoder class
 """
-class EdgeEncoder(nn.Module):
+class EdgeEncoder(torch.nn.Module):
     #==== initialization ====
     def __init__(self, directed=True):
         super().__init__()
